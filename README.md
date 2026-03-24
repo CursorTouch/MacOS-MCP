@@ -49,6 +49,14 @@
 - UV (Package Manager) from Astral, install with `pip install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - Accessibility permissions granted to the terminal or application running the MCP server
 
+### Quick Start
+
+Run the server directly with:
+
+```shell
+uvx macos-mcp
+```
+
 ### Grant Accessibility Permissions
 
 macOS-MCP requires Accessibility permissions to interact with UI elements:
@@ -63,30 +71,19 @@ macOS-MCP requires Accessibility permissions to interact with UI elements:
 
   1. Install [Claude Desktop](https://claude.ai/download)
 
-  2. Clone the repository:
-  ```shell
-  git clone https://github.com/Jeomon/macos-mcp.git
-  cd macos-mcp
-  ```
-
-  3. Add this to your `claude_desktop_config.json`:
+  2. Add this to your `claude_desktop_config.json`:
   ```json
   {
     "mcpServers": {
       "macos-mcp": {
-        "command": "uv",
-        "args": [
-          "--directory",
-          "<path to the macos-mcp directory>",
-          "run",
-          "macos-mcp"
-        ]
+        "command": "uvx",
+        "args": ["macos-mcp"]
       }
     }
   }
   ```
 
-  4. Restart Claude Desktop
+  3. Restart Claude Desktop
 
 </details>
 
@@ -98,33 +95,22 @@ macOS-MCP requires Accessibility permissions to interact with UI elements:
   npm install -g @google/gemini-cli
   ```
 
-  2. Clone the repository:
-  ```shell
-  git clone https://github.com/Jeomon/macos-mcp.git
-  cd macos-mcp
-  ```
+  2. Navigate to `~/.gemini` and open `settings.json`
 
-  3. Navigate to `~/.gemini` and open `settings.json`
-
-  4. Add the `macos-mcp` config:
+  3. Add the `macos-mcp` config:
   ```json
   {
     "theme": "Default",
     "mcpServers": {
       "macos-mcp": {
-        "command": "uv",
-        "args": [
-          "--directory",
-          "<path to the macos-mcp directory>",
-          "run",
-          "macos-mcp"
-        ]
+        "command": "uvx",
+        "args": ["macos-mcp"]
       }
     }
   }
   ```
 
-  5. Restart Gemini CLI
+  4. Restart Gemini CLI
 
 </details>
 
