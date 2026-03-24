@@ -198,7 +198,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 macOS-MCP makes use of several excellent open-source projects and macOS frameworks:
 
 - [PyObjC](https://pyobjc.readthedocs.io/) - Python to Objective-C bridge
-- [PyAutoGUI](https://github.com/asweigart/pyautogui) - Cross-platform GUI automation
 - [Pillow](https://pillow.readthedocs.io/) - Python Imaging Library
 - macOS Accessibility API (ApplicationServices)
 

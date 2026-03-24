@@ -12,19 +12,21 @@ from mcp.types import ToolAnnotations
 from typing import Literal, Optional
 from fastmcp import FastMCP, Context
 from textwrap import dedent
-import pyautogui as pg
 import asyncio
 import logging
+import os
+import signal
+import sys
+from threading import Lock
 import click
 
 logger = logging.getLogger(__name__)
 
-pg.FAILSAFE = False
-pg.PAUSE = 1.0
-
 desktop: Optional[Desktop] = None
 screen_size: Optional[Size] = None
 watchdog: Optional[WatchDog] = None
+_shutdown_lock = Lock()
+_shutdown_started = False
 
 MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT = 1920, 1080
 
@@ -33,13 +35,45 @@ macOS MCP server provides tools to interact directly with the macOS desktop,
 enabling operation of the desktop on the user's behalf.
 ''')
 
+
+def _stop_watchdog() -> None:
+    """Stop the watchdog once, even if shutdown paths race."""
+    global watchdog, _shutdown_started
+
+    with _shutdown_lock:
+        if _shutdown_started:
+            return
+        _shutdown_started = True
+
+    if watchdog:
+        try:
+            watchdog.stop()
+        except Exception:
+            logger.exception("Failed to stop watchdog during shutdown")
+        finally:
+            watchdog = None
+
+
+def _force_exit(exit_code: int = 130) -> None:
+    """Flush stdio and exit immediately to avoid daemon-thread shutdown hangs."""
+    _stop_watchdog()
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+
+    os._exit(exit_code)
+
 @asynccontextmanager
 async def lifespan(app: FastMCP):
     """Runs initialization code before the server starts and cleanup code after it shuts down."""
-    global desktop, screen_size, watchdog
+    global desktop, screen_size, watchdog, _shutdown_started
     
     desktop = Desktop()
     screen_size = desktop.get_screen_size()
+    _shutdown_started = False
     
     watchdog = WatchDog()
     watchdog.set_focus_callback(desktop.tree.on_focus_changed)
@@ -49,9 +83,7 @@ async def lifespan(app: FastMCP):
         await asyncio.sleep(0.5)  # Brief startup delay
         yield
     finally:
-        # Cleanup watchdog
-        if watchdog:
-            watchdog.stop()
+        _stop_watchdog()
 
 
 mcp = FastMCP(name='macos-mcp', instructions=instructions, lifespan=lifespan)
@@ -310,9 +342,25 @@ def scrape_tool(url: str, ctx: Context = None) -> str:
     show_default=True
 )
 def main(transport, host, port):
+    previous_sigint_handler = None
+
+    if transport == 'stdio':
+        previous_sigint_handler = signal.getsignal(signal.SIGINT)
+
+        def _handle_sigint(signum, frame):
+            _force_exit(130)
+
+        signal.signal(signal.SIGINT, _handle_sigint)
+
     match transport:
         case 'stdio':
-            mcp.run(transport=transport, show_banner=False)
+            try:
+                mcp.run(transport=transport, show_banner=False)
+            except (KeyboardInterrupt, click.Abort):
+                _force_exit(130)
+            finally:
+                if previous_sigint_handler is not None:
+                    signal.signal(signal.SIGINT, previous_sigint_handler)
         case 'sse' | 'streamable-http':
             mcp.run(transport=transport, host=host, port=port, show_banner=False)
         case _:
