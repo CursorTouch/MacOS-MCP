@@ -1,0 +1,31 @@
+[project]
+name = "macos-mcp"
+version = "0.1.0"
+description = "MCP Server for interacting with macOS Desktop."
+authors = [
+    { name = "Jeomon George", email = "jeogeoalukka@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyobjc-framework-ApplicationServices",
+    "pyobjc-framework-Cocoa",
+    "pyobjc-framework-Quartz",
+    "pillow",
+    "fastmcp",
+    "pyautogui",
+    "tabulate",
+    "click",
+    "markdownify",
+    "requests",
+    "ipykernel",
+    "notebook",
+    "ipywidgets",
+]
+
+[project.scripts]
+macos-mcp = "macos_mcp.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

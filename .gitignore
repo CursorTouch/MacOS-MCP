@@ -1,0 +1,6 @@
+.venv
+# *.png
+# *.txt
+__pycache__
+experiments
+.claude
