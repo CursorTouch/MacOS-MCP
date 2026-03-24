@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>macOS-MCP</h1>
+  <h1>🍎 MacOS-MCP</h1>
 
   <a href="https://github.com/Jeomon/macos-mcp/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
