@@ -753,6 +753,43 @@ def GetDPIScale() -> float:
     return 1.0
 
 
+def GetPerDisplayInfo() -> list[dict]:
+    """
+    Get per-display geometry and scale information.
+
+    For each active display returns a dict with:
+        logical_left, logical_top   — position in macOS logical coordinate space
+        logical_width, logical_height
+        pixel_width, pixel_height   — native physical resolution
+        scale                       — pixel_width / logical_width (2.0 for Retina)
+
+    Results are sorted left-to-right by logical_left, which matches the order
+    displays are laid out in the combined ImageGrab screenshot.
+    """
+    displays = []
+    try:
+        res = CGGetActiveDisplayList(32, None, None)
+        if res and res[1]:
+            for display_id in res[1]:
+                bounds = CGDisplayBounds(display_id)
+                lw = bounds.size.width
+                lh = bounds.size.height
+                pw = CGDisplayPixelsWide(display_id)
+                ph = CGDisplayPixelsHigh(display_id)
+                displays.append({
+                    'logical_left': bounds.origin.x,
+                    'logical_top': bounds.origin.y,
+                    'logical_width': lw,
+                    'logical_height': lh,
+                    'pixel_width': pw,
+                    'pixel_height': ph,
+                    'scale': pw / lw if lw > 0 else 1.0,
+                })
+    except Exception:
+        pass
+    return sorted(displays, key=lambda d: d['logical_left'])
+
+
 # =============================================================================
 # Screenshot Functions
 # =============================================================================

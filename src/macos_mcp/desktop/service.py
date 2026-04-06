@@ -333,28 +333,38 @@ class Desktop:
 
         draw = ImageDraw.Draw(padded)
 
-        # Virtual screen offset and DPI scale (logical points -> pixels)
-        left_offset, top_offset = 0, 0
-        logical_width, logical_height = 1, 1
-        try:
-            display_rects = ax.GetDisplayBounds()
-            if display_rects:
-                min_x = min(r.left for r in display_rects)
-                min_y = min(r.top for r in display_rects)
-                max_x = max(r.right for r in display_rects)
-                max_y = max(r.bottom for r in display_rects)
-                left_offset = int(min_x)
-                top_offset = int(min_y)
-                logical_width = int(max_x - min_x)
-                logical_height = int(max_y - min_y)
-            if logical_width <= 0 or logical_height <= 0:
-                logical_width, logical_height = ax.GetScreenSize()
-        except Exception:
-            logical_width, logical_height = ax.GetScreenSize()
+        # Per-display geometry for accurate logical→pixel coordinate mapping.
+        # ImageGrab stitches displays left-to-right in the combined image, each at
+        # its native pixel resolution, so we accumulate pixel_widths to find each
+        # display's pixel origin rather than using a single global scale factor.
+        display_infos = ax.GetPerDisplayInfo()
+        pixel_left_acc = 0
+        for d in display_infos:
+            d['pixel_left'] = pixel_left_acc
+            pixel_left_acc += d['pixel_width']
 
-        dpi_scale = img.width / logical_width if logical_width > 0 else ax.GetDPIScale()
+        virtual_left = display_infos[0]['logical_left'] if display_infos else 0
+        virtual_top = min(d['logical_top'] for d in display_infos) if display_infos else 0
 
-        # Font
+        def _find_display(lx: float, ly: float) -> Optional[dict]:
+            for d in display_infos:
+                if (d['logical_left'] <= lx < d['logical_left'] + d['logical_width'] and
+                        d['logical_top'] <= ly < d['logical_top'] + d['logical_height']):
+                    return d
+            return None
+
+        def _logical_to_pixel(lx: float, ly: float) -> tuple[int, int]:
+            d = _find_display(lx, ly)
+            if d:
+                px = d['pixel_left'] + int((lx - d['logical_left']) * d['scale'])
+                py = int((ly - d['logical_top']) * d['scale'])
+                return px, py
+            # Fallback: use average scale across all displays
+            avg_scale = img.width / max(sum(d['logical_width'] for d in display_infos), 1)
+            return int((lx - virtual_left) * avg_scale), int((ly - virtual_top) * avg_scale)
+
+        # Font sized to main display scale
+        dpi_scale = display_infos[0]['scale'] if display_infos else ax.GetDPIScale()
         font_size = max(12, int(14 * dpi_scale))
         try:
             font_path = "/System/Library/Fonts/Helvetica.ttc"
@@ -375,11 +385,24 @@ class Desktop:
                 return
             seen_boxes.add(box_key)
 
-            # Adjust for virtual screen offset and scale to pixels
-            x1 = int((box.left - left_offset) * dpi_scale) + padding
-            y1 = int((box.top - top_offset) * dpi_scale) + padding
-            x2 = int((box.right - left_offset) * dpi_scale) + padding
-            y2 = int((box.bottom - top_offset) * dpi_scale) + padding
+            # Convert logical coordinates to pixel coordinates using per-display scale
+            cx = (box.left + box.right) / 2
+            cy = (box.top + box.bottom) / 2
+            d = _find_display(cx, cy)
+            if d:
+                s = d['scale']
+                pl = d['pixel_left']
+                dl = d['logical_left']
+                dt = d['logical_top']
+                x1 = pl + int((box.left - dl) * s) + padding
+                y1 = int((box.top - dt) * s) + padding
+                x2 = pl + int((box.right - dl) * s) + padding
+                y2 = int((box.bottom - dt) * s) + padding
+            else:
+                x1, y1 = _logical_to_pixel(box.left, box.top)
+                x2, y2 = _logical_to_pixel(box.right, box.bottom)
+                x1 += padding; y1 += padding
+                x2 += padding; y2 += padding
 
             # Deterministic color per label
             random.seed(label)
