@@ -355,17 +355,12 @@ def GetChildren(element: Any) -> list[Any]:
     return []
 
 
-def GetPosition(element: Any) -> Optional[Tuple[float, float]]:
-    """Get the position (x, y) of an accessibility element in screen coordinates."""
-    error, pos_val = AXUIElementCopyAttributeValue(element, Attribute.Position, None)
-    if error != kAXErrorSuccess or pos_val is None:
+def _parse_ax_position(pos_val) -> Optional[Tuple[float, float]]:
+    """Parse a position from a raw AXValue that has already been fetched."""
+    if pos_val is None:
         return None
-
-    # Try standard attribute access (bridged CGPoint/NSPoint)
     if hasattr(pos_val, 'x') and hasattr(pos_val, 'y'):
         return (pos_val.x, pos_val.y)
-
-    # Try AXValueGetValue for proper AXValueRef extraction
     try:
         from ApplicationServices import AXValueGetValue
         success, point = AXValueGetValue(pos_val, AXValueType.CGPoint, None)
@@ -374,8 +369,6 @@ def GetPosition(element: Any) -> Optional[Tuple[float, float]]:
                 return (point.x, point.y)
     except Exception:
         pass
-
-    # Try AXValue string parsing (fallback)
     if hasattr(pos_val, 'getValue_size_type_') or str(pos_val).startswith('<AXValue'):
         desc = str(pos_val)
         try:
@@ -384,28 +377,20 @@ def GetPosition(element: Any) -> Optional[Tuple[float, float]]:
                 return (float(match.group(1)), float(match.group(2)))
         except Exception:
             pass
-
-    # Try generic sequence access
     try:
         if len(pos_val) == 2:
             return (pos_val[0], pos_val[1])
     except Exception:
         pass
-
     return None
 
 
-def GetSize(element: Any) -> Optional[Tuple[float, float]]:
-    """Get the size (width, height) of an accessibility element."""
-    error, size_val = AXUIElementCopyAttributeValue(element, Attribute.Size, None)
-    if error != kAXErrorSuccess or size_val is None:
+def _parse_ax_size(size_val) -> Optional[Tuple[float, float]]:
+    """Parse a size from a raw AXValue that has already been fetched."""
+    if size_val is None:
         return None
-
-    # Try standard attribute access (bridged CGSize/NSSize)
     if hasattr(size_val, 'width') and hasattr(size_val, 'height'):
         return (size_val.width, size_val.height)
-
-    # Try AXValueGetValue for proper AXValueRef extraction
     try:
         from ApplicationServices import AXValueGetValue
         success, size = AXValueGetValue(size_val, AXValueType.CGSize, None)
@@ -414,15 +399,11 @@ def GetSize(element: Any) -> Optional[Tuple[float, float]]:
                 return (size.width, size.height)
     except Exception:
         pass
-
-    # Try generic sequence access
     try:
         if len(size_val) == 2:
             return (size_val[0], size_val[1])
     except Exception:
         pass
-
-    # Try AXValue string parsing (fallback)
     if hasattr(size_val, 'getValue_size_type_') or str(size_val).startswith('<AXValue'):
         desc = str(size_val)
         try:
@@ -431,8 +412,23 @@ def GetSize(element: Any) -> Optional[Tuple[float, float]]:
                 return (float(match.group(2)), float(match.group(4)))
         except Exception:
             pass
-
     return None
+
+
+def GetPosition(element: Any) -> Optional[Tuple[float, float]]:
+    """Get the position (x, y) of an accessibility element in screen coordinates."""
+    error, pos_val = AXUIElementCopyAttributeValue(element, Attribute.Position, None)
+    if error != kAXErrorSuccess or pos_val is None:
+        return None
+    return _parse_ax_position(pos_val)
+
+
+def GetSize(element: Any) -> Optional[Tuple[float, float]]:
+    """Get the size (width, height) of an accessibility element."""
+    error, size_val = AXUIElementCopyAttributeValue(element, Attribute.Size, None)
+    if error != kAXErrorSuccess or size_val is None:
+        return None
+    return _parse_ax_size(size_val)
 
 
 def GetRect(element: Any) -> Optional[Rect]:
@@ -442,6 +438,62 @@ def GetRect(element: Any) -> Optional[Rect]:
     if pos and size:
         return Rect.from_position_size(pos[0], pos[1], size[0], size[1])
     return None
+
+
+# Attributes fetched in one batch call per element during tree traversal.
+_TRAVERSAL_ATTRIBUTES = [
+    Attribute.Role,
+    Attribute.Subrole,
+    Attribute.Position,
+    Attribute.Size,
+    Attribute.Hidden,
+    Attribute.Enabled,
+    Attribute.Help,
+    Attribute.Title,
+    Attribute.Description,
+    Attribute.Identifier,
+    Attribute.Value,
+]
+
+
+def GetTraversalBatch(element: Any) -> dict:
+    """
+    Fetch all attributes needed for accessibility tree traversal in a single API call.
+
+    Replaces ~10 individual GetAttribute calls per element with one
+    AXUIElementCopyMultipleAttributeValues call, giving a significant speedup
+    when traversing large UI trees.
+
+    Returns a dict with pre-parsed, ready-to-use values:
+        role, subrole, hidden, enabled, help, title, description,
+        identifier, value, label (computed), rect (Rect | None)
+    """
+    raw = GetMultipleAttributeValues(element, _TRAVERSAL_ATTRIBUTES)
+
+    pos = _parse_ax_position(raw.get(Attribute.Position))
+    size = _parse_ax_size(raw.get(Attribute.Size))
+    rect = Rect.from_position_size(pos[0], pos[1], size[0], size[1]) if pos and size else None
+
+    title = raw.get(Attribute.Title) or ''
+    identifier = raw.get(Attribute.Identifier) or ''
+    description = raw.get(Attribute.Description) or ''
+    value = raw.get(Attribute.Value)
+    value_str = str(value) if value is not None else ''
+    label = title or identifier or description or value_str
+
+    return {
+        'role': raw.get(Attribute.Role) or '',
+        'subrole': raw.get(Attribute.Subrole) or '',
+        'hidden': raw.get(Attribute.Hidden) is True,
+        'enabled': raw.get(Attribute.Enabled) is not False,
+        'help': raw.get(Attribute.Help) or '',
+        'title': title,
+        'description': description,
+        'identifier': identifier,
+        'value': value,
+        'label': label,
+        'rect': rect,
+    }
 
 
 def ElementAtPosition(application, x: float, y: float):

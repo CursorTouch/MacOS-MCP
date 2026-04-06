@@ -113,110 +113,104 @@ class Tree:
                 self.tree_traversal(child, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
-    def element_has_child_element(self, node: ax.Control, control_type: str, child_control_type: str):
-        if node.Role == control_type:
-            first_child = node.GetFirstChildControl()
-            if first_child is None:
-                return False
-            return first_child.Role == child_control_type
-
-    def _dom_correction(self,control: ax.Control, interactive_nodes: list[TreeElementNode], window_name: str):
-        if self.element_has_child_element(control, "AXLink", "AXHeading"):
-            interactive_nodes.pop()
-            control=control.GetFirstChildControl()
-            bounding_box=BoundingBox.from_bounding_rectangle(control.BoundingRectangle)
-            center=bounding_box.get_center()
-            metadata = {}
-            if identifier := control.Identifier:
-                metadata['axidentifier'] = identifier
-            interactive_nodes.append(TreeElementNode(
-                bounding_box=bounding_box,
-                center=center,
-                name=control.Label or "",
-                control_type=control.Role or "",
-                window_name=window_name,
-                metadata=metadata,
-            ))
-
-    def _desktop_correction(self,control: ax.Control, interactive_nodes: list[TreeElementNode], window_name: str):
-        if self.element_has_child_element(control, "AXCell", "AXStaticText"):
-            interactive_nodes.pop()
-            child=control.GetFirstChildControl()
-            bounding_box=BoundingBox.from_bounding_rectangle(control.BoundingRectangle)
-            center=bounding_box.get_center()
-            metadata = {}
-            if identifier := control.Identifier:
-                metadata['axidentifier'] = identifier
-            interactive_nodes.append(TreeElementNode(
-                bounding_box=bounding_box,
-                center=center,
-                name=child.Label or "",
-                control_type=control.Role or "",
-                window_name=window_name,
-                metadata=metadata,
-            ))
-        elif control.Role=="AXButton" and  not control.Label:
-            if control.Subrole in WINDOW_CONTROL_SUBROLES:
+    def _dom_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str):
+        if attrs['role'] == "AXLink":
+            first_child = control.GetFirstChildControl()
+            if first_child is not None and first_child.Role == "AXHeading":
                 interactive_nodes.pop()
-                bounding_box=BoundingBox.from_bounding_rectangle(control.BoundingRectangle)
-                center=bounding_box.get_center()
+                child_attrs = ax.GetTraversalBatch(first_child.Element)
+                if child_attrs['rect']:
+                    bounding_box = BoundingBox.from_bounding_rectangle(child_attrs['rect'])
+                    center = bounding_box.get_center()
+                    metadata = {}
+                    if child_attrs['identifier']:
+                        metadata['axidentifier'] = child_attrs['identifier']
+                    interactive_nodes.append(TreeElementNode(
+                        bounding_box=bounding_box,
+                        center=center,
+                        name=child_attrs['label'] or "",
+                        control_type=child_attrs['role'] or "",
+                        window_name=window_name,
+                        metadata=metadata,
+                    ))
+
+    def _desktop_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str):
+        role = attrs['role']
+        rect = attrs['rect']
+        if role == "AXCell":
+            first_child = control.GetFirstChildControl()
+            if first_child is not None and first_child.Role == "AXStaticText":
+                interactive_nodes.pop()
+                bounding_box = BoundingBox.from_bounding_rectangle(rect)
+                center = bounding_box.get_center()
                 metadata = {}
-                if identifier := control.Identifier:
-                    metadata['axidentifier'] = identifier
+                if attrs['identifier']:
+                    metadata['axidentifier'] = attrs['identifier']
                 interactive_nodes.append(TreeElementNode(
                     bounding_box=bounding_box,
                     center=center,
-                    name=WINDOW_CONTROL_SUBROLES[control.Subrole] or "",
-                    control_type=control.Role or "",
+                    name=first_child.Label or "",
+                    control_type=role,
+                    window_name=window_name,
+                    metadata=metadata,
+                ))
+        elif role == "AXButton" and not attrs['label']:
+            subrole = attrs['subrole']
+            if subrole in WINDOW_CONTROL_SUBROLES:
+                interactive_nodes.pop()
+                bounding_box = BoundingBox.from_bounding_rectangle(rect)
+                center = bounding_box.get_center()
+                metadata = {}
+                if attrs['identifier']:
+                    metadata['axidentifier'] = attrs['identifier']
+                interactive_nodes.append(TreeElementNode(
+                    bounding_box=bounding_box,
+                    center=center,
+                    name=WINDOW_CONTROL_SUBROLES[subrole] or "",
+                    control_type=role,
                     window_name=window_name,
                     metadata=metadata,
                 ))
 
-
-    def tree_traversal(self,control: ax.Control, window_name: str, interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode], is_browser: bool) -> None:
+    def tree_traversal(self, control: ax.Control, window_name: str, interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode], is_browser: bool) -> None:
         """
         Traverse the accessibility tree and collect interactive and scrollable nodes.
-        - Skip hidden elements
-        - Skip zero-size elements
-        - Containers (AXGroup, AXList, etc.) are not added as interactive
-        - Interactive elements must have content (title/description/value/actions/subrole)
-        - Interactive leaf elements: add and do not recurse into children
+
+        All element attributes are fetched in a single batch call per element via
+        AXUIElementCopyMultipleAttributeValues, replacing the previous approach of
+        making individual GetAttribute calls for each property.
         """
+        attrs = ax.GetTraversalBatch(control.Element)
 
-        element_bounding_box=control.BoundingRectangle
-        width=element_bounding_box.width
-        height=element_bounding_box.height
+        rect = attrs['rect']
+        if rect is None:
+            for child in control.GetChildren():
+                self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
+            return
 
-        is_visible=not control.IsHidden and (width>0 and height>0)
-
-        is_enabled=control.IsEnabled
-
-        has_help_text=control.Help!=""
-
-        # has_actions=any(action in INTERACTIVE_ACTIONS for action in control.ActionNames)
-
-        has_roles=(control.Role in INTERACTIVE_ROLES) or (control.Role=="AXImage" and control.Label)
-        
-        is_interactive=((has_roles and is_enabled) or has_help_text) and is_visible
+        role = attrs['role']
+        is_visible = not attrs['hidden'] and (rect.width > 0 and rect.height > 0)
+        is_enabled = attrs['enabled']
+        has_help_text = bool(attrs['help'])
+        has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage" and attrs['label'])
+        is_interactive = ((has_roles and is_enabled) or has_help_text) and is_visible
 
         if is_interactive:
-            label=control.Label
-            control_type=control.Role
-            bounding_box=BoundingBox.from_bounding_rectangle(element_bounding_box)
-            center=bounding_box.get_center()
+            bounding_box = BoundingBox.from_bounding_rectangle(rect)
+            center = bounding_box.get_center()
             interactive_nodes.append(
                 TreeElementNode(
-                        bounding_box=bounding_box,
-                        center=center,
-                        name= label,
-                        control_type=control_type,
-                        window_name=window_name,
-                    )
+                    bounding_box=bounding_box,
+                    center=center,
+                    name=attrs['label'],
+                    control_type=role,
+                    window_name=window_name,
                 )
+            )
             if is_browser:
-                self._dom_correction(control, interactive_nodes, window_name)
+                self._dom_correction(control, attrs, interactive_nodes, window_name)
             else:
-                self._desktop_correction(control, interactive_nodes, window_name)
+                self._desktop_correction(control, attrs, interactive_nodes, window_name)
 
         for child in control.GetChildren():
             self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)

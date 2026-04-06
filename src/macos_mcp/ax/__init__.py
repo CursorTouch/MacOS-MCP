@@ -104,6 +104,7 @@ from .core import (
     ElementAtPosition,
     GetElementPid,
     GetMultipleAttributeValues,
+    GetTraversalBatch,
     GetAttributeValues,
     GetActionDescription,
     SetMessagingTimeout,
