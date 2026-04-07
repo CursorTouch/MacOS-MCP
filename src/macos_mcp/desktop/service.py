@@ -197,6 +197,8 @@ class Desktop:
         if app is None:
             return None
         window=app.MainWindow
+        if window is None:
+            return None
         is_browser = app.BundleIdentifier in BROWSER_BUNDLE_IDS
         rect=window.BoundingRectangle
         if rect:

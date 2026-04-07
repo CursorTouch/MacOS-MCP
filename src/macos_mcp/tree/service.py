@@ -27,7 +27,8 @@ class Tree:
         for bundle_id in SYSTEM_UI_BUNDLE_IDS:
             if app := ax.GetRunningApplicationByBundleId(bundle_id):
                 bundle_ids.append(app.BundleIdentifier)
-        bundle_ids.append(active_window.bundle_id)
+        if active_window:
+            bundle_ids.append(active_window.bundle_id)
 
         interactive_nodes, scrollable_nodes, dom_informative_nodes = self.get_window_wise_nodes(bundle_ids=bundle_ids)
 
