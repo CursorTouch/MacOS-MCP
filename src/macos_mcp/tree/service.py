@@ -32,6 +32,24 @@ class Tree:
 
         interactive_nodes, scrollable_nodes, dom_informative_nodes = self.get_window_wise_nodes(bundle_ids=bundle_ids)
 
+        # Filter nodes to only include those within active window bounds
+        if active_window and (active_window.bounding_box.width > 0 and active_window.bounding_box.height > 0):
+            active_window_bbox = active_window.bounding_box
+            interactive_nodes = [
+                node for node in interactive_nodes
+                if (node.bounding_box.left >= active_window_bbox.left and
+                    node.bounding_box.top >= active_window_bbox.top and
+                    node.bounding_box.right <= active_window_bbox.right and
+                    node.bounding_box.bottom <= active_window_bbox.bottom)
+            ]
+            scrollable_nodes = [
+                node for node in scrollable_nodes
+                if (node.bounding_box.left >= active_window_bbox.left and
+                    node.bounding_box.top >= active_window_bbox.top and
+                    node.bounding_box.right <= active_window_bbox.right and
+                    node.bounding_box.bottom <= active_window_bbox.bottom)
+            ]
+
         return TreeState(
             status=True,
             interactive_nodes=interactive_nodes,
