@@ -1,0 +1,14 @@
+{
+  "name": "io.github.Jeomon/macOS-MCP",
+  "status": "active",
+  "version": "0.1.1",
+  "repository": "https://github.com/Jeomon/macos-mcp",
+  "description": "An MCP Server for computer-use in macOS",
+  "package": {
+    "registry": "PyPI",
+    "name": "macos-mcp",
+    "version": "0.1.1"
+  },
+  "runtime": "uvx",
+  "transport": "stdio"
+}

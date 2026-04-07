@@ -6,6 +6,7 @@ Provides tools to interact with the macOS desktop for automation.
 from macos_mcp.desktop.service import Desktop
 from macos_mcp.desktop.views import Size
 from macos_mcp.watchdog import WatchDog
+from macos_mcp.permissions import validate_permissions
 from contextlib import asynccontextmanager
 from fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
@@ -342,6 +343,9 @@ def scrape_tool(url: str, ctx: Context = None) -> str:
     show_default=True
 )
 def main(transport, host, port):
+    # Validate required permissions before starting server
+    validate_permissions()
+
     previous_sigint_handler = None
 
     if transport == 'stdio':

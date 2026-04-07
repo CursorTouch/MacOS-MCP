@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🍎 MacOS-MCP</h1>
+  <h1>🍎 macOS-MCP</h1>
 
   <a href="https://github.com/Jeomon/macos-mcp/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
@@ -10,9 +10,9 @@
 
 </div>
 
-<br>
+## Overview
 
-**macOS-MCP** is a lightweight, open-source project that enables seamless integration between AI agents and the macOS operating system. Acting as an MCP server, it bridges the gap between LLMs and macOS, allowing agents to perform tasks such as **file navigation, application control, UI interaction, browser automation,** and more.
+**macOS-MCP** is a lightweight, open-source Model Context Protocol server that bridges AI agents and the macOS operating system. It enables seamless automation of macOS through LLMs via tasks such as **file navigation, application control, UI interaction, browser automation**, and system operations.
 
 ## Supported Operating Systems
 
@@ -23,35 +23,36 @@
 
 ## Key Features
 
-- **Seamless macOS Integration**  
-  Interacts natively with macOS UI elements using the Accessibility API, opens apps, controls windows, simulates user input, and more.
+- **Works with Any LLM** (Vision Optional)  
+  Unlike traditional automation tools, macOS-MCP doesn't require computer vision, fine-tuned models, or specialized setup. Works seamlessly with any LLM—Claude, GPT, Gemini, or others.
 
-- **Use Any LLM (Vision Optional)**  
-  Unlike many automation tools, macOS-MCP doesn't rely on traditional computer vision techniques or specific fine-tuned models. It works with any LLM, reducing complexity and setup time.
+- **Native macOS Integration**  
+  Interacts natively with macOS UI elements using the Accessibility API. Opens apps, controls windows, simulates user input, and captures desktop state without workarounds.
 
-- **Rich Toolset for UI Automation**  
-  Includes tools for keyboard and mouse operations, capturing window/UI state, and extracting interactive elements from the accessibility tree.
+- **Rich Toolset for Automation**  
+  Complete toolkit for keyboard/mouse operations, window management, UI state capture, interactive element extraction from the accessibility tree, and AppleScript execution.
 
 - **Lightweight and Open-Source**  
-  Minimal dependencies and easy setup with full source code available under MIT license.
+  Minimal dependencies with full source code available under MIT license. Easy setup and deployment.
 
-- **Customizable and Extendable**  
-  Easily adapt or extend tools to suit your unique automation or AI integration needs.
+- **Smart Context Awareness**  
+  Automatically detects application state (Launchpad, Control Center, Spotlight). Scans menu bar, dock, desktop, and system UI elements intelligently.
 
-- **Support for Launchpad and System UI**  
-  Automatically detects when Launchpad is open and adjusts scanning behavior accordingly. Scans Control Center, Spotlight, and menu bar elements.
+- **Customizable and Extensible**  
+  Easily extend with custom tools or modify behavior to suit your specific automation needs.
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.11+
-- UV (Package Manager) from Astral, install with `pip install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- Accessibility permissions granted to the terminal or application running the MCP server
+- **Python**: 3.11 or later
+- **UV Package Manager**: Install with `pip install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- **macOS**: 12 (Monterey) or later
+- **Accessibility Permissions**: Required for UI element interaction
 
 ### Quick Start
 
-Run the server directly with:
+Run the server directly:
 
 ```shell
 uvx macos-mcp
@@ -61,17 +62,19 @@ uvx macos-mcp
 
 macOS-MCP requires Accessibility permissions to interact with UI elements:
 
-1. Open **System Settings** > **Privacy & Security** > **Accessibility**
+1. Open **System Settings** → **Privacy & Security** → **Accessibility**
 2. Click the lock icon and authenticate
 3. Add your terminal application (Terminal, iTerm2, VS Code, etc.)
 4. Restart the terminal after granting permissions
 
+### Integration Options
+
 <details>
-  <summary>Install in Claude Desktop</summary>
+  <summary><strong>Claude Desktop</strong></summary>
 
   1. Install [Claude Desktop](https://claude.ai/download)
 
-  2. Add this to your `claude_desktop_config.json`:
+  2. Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   ```json
   {
     "mcpServers": {
@@ -88,7 +91,7 @@ macOS-MCP requires Accessibility permissions to interact with UI elements:
 </details>
 
 <details>
-  <summary>Install in Gemini CLI</summary>
+  <summary><strong>Gemini CLI</strong></summary>
 
   1. Install Gemini CLI:
   ```shell
@@ -97,7 +100,7 @@ macOS-MCP requires Accessibility permissions to interact with UI elements:
 
   2. Navigate to `~/.gemini` and open `settings.json`
 
-  3. Add the `macos-mcp` config:
+  3. Add the server config:
   ```json
   {
     "theme": "Default",
@@ -114,105 +117,152 @@ macOS-MCP requires Accessibility permissions to interact with UI elements:
 
 </details>
 
+<details>
+  <summary><strong>Claude Code</strong></summary>
+
+  1. Install [Claude Code](https://claude.com/claude-code)
+
+  2. Add to your project configuration or use the MCP marketplace integration
+
+</details>
+
+<details>
+  <summary><strong>Other Integrations</strong></summary>
+
+  Any client supporting the Model Context Protocol can integrate macOS-MCP by configuring the `uvx macos-mcp` command in their MCP server settings.
+
+</details>
+
 ---
 
 ## MCP Tools
 
-MCP Client can access the following tools to interact with macOS:
+macOS-MCP provides a comprehensive toolset for desktop automation:
 
-| Tool | Description |
-|------|-------------|
-| `Click` | Click on the screen at the given coordinates. Supports left, right, and double-click. |
-| `Type` | Type text at the current cursor position. Optionally clears existing text first. |
-| `Scroll` | Scroll vertically or horizontally on the focused window or specific regions. |
-| `Move` | Move mouse pointer or drag (set drag=True) to coordinates. |
-| `Shortcut` | Press keyboard shortcuts (Cmd+C, Cmd+Tab, etc). |
-| `Wait` | Pause execution for a defined duration. |
-| `Snapshot` | Capture desktop state including active window, open applications, interactive elements with coordinates, and scrollable areas. Set `use_vision=True` to include annotated screenshots. |
-| `App` | Launch an application, resize/move windows, or switch between apps. Supports bundle IDs and app names. |
-| `Shell` | Execute shell commands or AppleScript. Use `mode='osascript'` for AppleScript execution. |
-| `Scrape` | Extract and convert webpage content to Markdown format. |
+| Tool | Purpose |
+|------|---------|
+| **Click** | Click at coordinates with support for left, right, and double-click |
+| **Type** | Type text at cursor position, optionally clearing existing text |
+| **Scroll** | Scroll vertically or horizontally in focused window or regions |
+| **Move** | Move mouse pointer or drag to coordinates |
+| **Shortcut** | Press keyboard shortcuts (Cmd+C, Cmd+Tab, etc.) |
+| **Snapshot** | Capture desktop state with interactive elements and coordinates. Set `use_vision=True` for annotated screenshots |
+| **App** | Launch applications, manage windows (resize/move), switch between apps. Supports app names and bundle IDs |
+| **Shell** | Execute shell commands or AppleScript. Use `mode='osascript'` for AppleScript |
+| **Scrape** | Extract and convert webpage content to Markdown format |
+| **Wait** | Pause execution for a defined duration |
 
 ## Architecture
 
+macOS-MCP is organized into modular services for clean separation of concerns:
+
 ```
 macos-mcp/
-├── src/
-│   └── macos_mcp/
-│       ├── __init__.py
-│       ├── __main__.py          # MCP server entry point and tool definitions
-│       ├── desktop/
-│       │   ├── __init__.py
-│       │   ├── service.py       # Desktop automation service
-│       │   ├── views.py         # Data classes for desktop state
-│       │   └── config.py        # Configuration constants
-│       └── tree/
-│           ├── __init__.py
-│           ├── service.py       # Accessibility tree traversal
-│           ├── views.py         # Data classes for tree elements
-│           └── config.py        # Interactive roles and actions
-├── pyproject.toml
-└── README.md
+├── src/macos_mcp/
+│   ├── __main__.py                # Entry point, tool registration, server lifecycle
+│   ├── desktop/
+│   │   ├── service.py             # High-level automation orchestration
+│   │   ├── views.py               # Desktop state data structures
+│   │   └── config.py              # Configuration constants
+│   └── tree/
+│       ├── service.py             # Accessibility tree traversal & analysis
+│       ├── views.py               # UI element data structures
+│       └── config.py              # Interactive roles and actions
+├── .github/workflows/             # CI/CD automation
+├── pyproject.toml                 # Project dependencies & metadata
+└── README.md                       # This file
 ```
+
+### Key Components
+
+- **Entry Point** (`__main__.py`): Registers MCP tools and initializes server lifecycle
+- **Desktop Service**: High-level automation orchestrator for input, output, and window management
+- **Tree Service**: Traverses macOS accessibility tree to capture and analyze UI elements
+- **Config Modules**: Define supported UI roles, actions, and interactive element types
 
 ## How It Works
 
-1. **Accessibility Tree Traversal**: Uses macOS Accessibility API (`ApplicationServices`) to traverse UI elements and extract interactive components.
+### 1. Accessibility API Integration
+macOS-MCP leverages the native Accessibility API (`ApplicationServices`) to traverse UI elements without relying on pixel-based detection or vision models. This provides reliable, coordinate-based interaction with any macOS application.
 
-2. **Parallel Scanning**: Scans multiple sources concurrently:
-   - Focused application window
-   - Dock
-   - Menu bar
-   - Control Center
-   - SystemUIServer
-   - Spotlight
-   - Desktop icons (when visible)
+### 2. Parallel UI Scanning
+The Tree Service scans multiple UI sources concurrently for efficiency:
+- Focused application window (primary interaction target)
+- System UI: Dock, menu bar, Control Center
+- System services: Spotlight, SystemUIServer
+- Desktop: Icons and window chrome (when no app is focused)
 
-3. **Smart Context Awareness**:
-   - Detects Launchpad state and adjusts scanning
-   - Only shows desktop icons when no window is focused
-   - Filters out background services to show only user-facing apps
+### 3. Intelligent Context Awareness
+- **Smart Detection**: Recognizes Launchpad state and adjusts scanning behavior
+- **Focused Scoping**: Prioritizes active window but includes system UI elements
+- **Filter Logic**: Excludes background services, shows only user-facing interfaces
+- **Window Hierarchy**: Understands parent-child relationships for accurate interaction
 
-4. **Screenshot Annotations**: When `use_vision=True`, generates screenshots with numbered bounding boxes on interactive elements for visual reference.
+### 4. Visual Feedback (Optional)
+When `use_vision=True`, Snapshot tool generates annotated screenshots with numbered bounding boxes on interactive elements, providing visual context without requiring vision-based decision-making.
 
 ## Limitations
 
-- Requires Accessibility permissions to be granted manually
-- Some applications may have limited accessibility support
-- Performance may vary based on the complexity of the UI and number of open applications
+- **Accessibility Requirements**: Manual permission grant required in System Preferences
+- **App Compatibility**: Some applications have limited or no Accessibility API support
+- **Performance Variance**: Complex UIs with many elements may have slower traversal
+- **Text Input**: Some specialized input fields may not properly receive keystrokes
+- **Authentication**: Cannot interact with system authentication dialogs
 
 ## Security
 
-**Important**: macOS-MCP operates with accessibility access and can perform system-level operations. Please review the following before deployment:
+⚠️ **Important Security Notice**: macOS-MCP operates with full Accessibility API permissions and executes real system operations without sandboxing. It can perform permanent, irreversible actions.
 
-- Grant accessibility permissions only to trusted applications
-- Be cautious when using Shell tool with elevated commands
-- Review and understand the actions being performed by AI agents
+**Before using macOS-MCP:**
 
-## License
+- ✅ Grant Accessibility permissions only to trusted applications
+- ✅ Understand that Shell commands execute with full user privileges
+- ✅ Review AI-generated action plans before execution
+- ✅ Use only in virtual machines or isolated environments with valueless data
+- ✅ Create backups before testing in production-like scenarios
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**⛔ Do NOT use on:**
+- Systems with irreplaceable data
+- Production machines or shared systems
+- Compliance-regulated environments (HIPAA, PCI, etc.)
 
-## Acknowledgements
-
-macOS-MCP makes use of several excellent open-source projects and macOS frameworks:
-
-- [PyObjC](https://pyobjc.readthedocs.io/) - Python to Objective-C bridge
-- [Pillow](https://pillow.readthedocs.io/) - Python Imaging Library
-- macOS Accessibility API (ApplicationServices)
+For detailed security guidance, see [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Development setup and code standards
+- Testing requirements
+- Pull request process
+- Coding conventions (Ruff formatting, 100 char line length)
+
+## License
+
+macOS-MCP is licensed under the MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgements
+
+macOS-MCP is built with excellent open-source projects:
+
+- [PyObjC](https://pyobjc.readthedocs.io/) - Python to Objective-C bridge
+- [Pillow](https://pillow.readthedocs.io/) - Python Imaging Library
+- [FastMCP](https://github.com/jlowin/fastmcp) - MCP framework
+- macOS Accessibility API (ApplicationServices)
 
 ## Citation
 
+If you use macOS-MCP in your research or project, please cite:
+
 ```bibtex
-@software{
-  author       = {Jeomon},
-  title        = {macOS-MCP: Lightweight open-source project for integrating LLM agents with macOS},
+@software{macos-mcp,
+  author       = {Jeomon George},
+  title        = {macOS-MCP: Lightweight MCP Server for macOS Automation},
   year         = {2025},
   publisher    = {GitHub},
   url          = {https://github.com/Jeomon/macos-mcp}
 }
 ```
+
+---
+
+**Questions or Issues?** [Open an issue](https://github.com/Jeomon/macos-mcp/issues) or check [SECURITY.md](SECURITY.md) for security concerns.

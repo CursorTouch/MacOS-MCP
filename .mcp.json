@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "macos-mcp": {
+      "command": "uvx",
+      "args": ["macos-mcp"]
+    }
+  }
+}
