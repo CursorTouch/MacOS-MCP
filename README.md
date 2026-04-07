@@ -58,14 +58,32 @@ Run the server directly:
 uvx macos-mcp
 ```
 
-### Grant Accessibility Permissions
+### Grant Required Permissions
 
-macOS-MCP requires Accessibility permissions to interact with UI elements:
+macOS-MCP requires **Accessibility** and **Screen Recording** permissions to function properly.
+
+#### Accessibility Permissions
 
 1. Open **System Settings** → **Privacy & Security** → **Accessibility**
 2. Click the lock icon and authenticate
-3. Add your terminal application (Terminal, iTerm2, VS Code, etc.)
+3. Add the following applications:
+   - Your terminal application (Terminal, iTerm2, VS Code, etc.)
+   - Python (typically `/usr/bin/python3` or the Python version managed by UV)
+   - UV (`~/.local/bin/uv` if installed locally, or the Python environment UV manages)
 4. Restart the terminal after granting permissions
+
+**For `uvx` users:** Grant permissions to your terminal application and Python, as `uvx` runs Python packages from UV's cache.
+
+#### Screen Recording Permissions
+
+The `Snapshot` tool requires Screen Recording permissions to capture screenshots:
+
+1. Open **System Settings** → **Privacy & Security** → **Screen Recording**
+2. Click the lock icon and authenticate
+3. Add the same applications as above (terminal, Python, UV)
+4. Restart the terminal after granting permissions
+
+**Note:** If the `Snapshot` tool fails, verify both permissions are granted in System Settings.
 
 ### Integration Options
 
