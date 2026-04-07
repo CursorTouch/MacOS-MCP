@@ -564,10 +564,22 @@ def GetMultipleAttributeValues(
         if error == kAXErrorSuccess and values:
             result = {}
             for attr, val in zip(attributes, values):
-                # AXUIElementCopyMultipleAttributeValues returns kAXErrorSuccess
-                # per-attribute errors are represented as AXError values in the array
-                if not isinstance(val, int) or val >= 0:
-                    result[attr] = val
+                # AXUIElementCopyMultipleAttributeValues returns kAXErrorSuccess overall,
+                # but per-attribute errors are embedded in the array as either negative
+                # ints or AXValue objects of type kAXValueAXErrorType (5).
+                if val is None:
+                    continue
+                if isinstance(val, int) and val < 0:
+                    continue
+                # Detect AXValue error objects (kAXValueAXErrorType = 5)
+                if not isinstance(val, (str, bool, int, float, list, dict)):
+                    try:
+                        from ApplicationServices import AXValueGetType
+                        if AXValueGetType(val) == AXValueType.AXError:
+                            continue
+                    except Exception:
+                        pass
+                result[attr] = val
             return result
     except Exception:
         pass
