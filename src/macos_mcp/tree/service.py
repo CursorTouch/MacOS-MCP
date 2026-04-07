@@ -32,23 +32,9 @@ class Tree:
         if active_window:
             bundle_ids.append(active_window.bundle_id)
 
-        # Get active window's rect to filter elements during tree traversal
-        active_window_rect = None
-        if active_window and (active_window.bounding_box.width > 0 and
-                              active_window.bounding_box.height > 0):
-            bbox = active_window.bounding_box
-            active_window_rect = ax.Rect(
-                left=bbox.left,
-                top=bbox.top,
-                right=bbox.right,
-                bottom=bbox.bottom
-            )
-
         interactive_nodes, scrollable_nodes, dom_informative_nodes = (
             self.get_window_wise_nodes(
                 bundle_ids=bundle_ids,
-                active_window_rect=active_window_rect,
-                active_window_bundle_id=active_window.bundle_id if active_window else None,
                 system_bundle_ids=system_bundle_ids
             )
         )
@@ -60,8 +46,7 @@ class Tree:
             dom_informative_nodes=dom_informative_nodes,
         )
 
-    def get_window_wise_nodes(self, bundle_ids: list[str], active_window_rect=None,
-                              active_window_bundle_id: str | None = None,
+    def get_window_wise_nodes(self, bundle_ids: list[str],
                               system_bundle_ids: list[str] | None = None) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
@@ -79,13 +64,7 @@ class Tree:
             retry_counts: dict[str, int] = {bid: 0 for bid, _ in task_inputs}
             future_to_bundle_id: dict = {}
             for bid, is_browser in task_inputs:
-                # Only pass window_rect for active window, not for system UI
-                window_rect = (
-                    active_window_rect
-                    if bid == active_window_bundle_id and bid not in system_bundle_ids
-                    else None
-                )
-                future = executor.submit(self.get_nodes, bid, is_browser, window_rect)
+                future = executor.submit(self.get_nodes, bid, is_browser)
                 future_to_bundle_id[future] = bid
 
             while future_to_bundle_id:
@@ -110,14 +89,8 @@ class Tree:
                             is_browser = next(
                                 (ib for b, ib in task_inputs if b == bundle_id), False
                             )
-                            window_rect = (
-                                active_window_rect
-                                if bundle_id == active_window_bundle_id
-                                and bundle_id not in system_bundle_ids
-                                else None
-                            )
                             new_future = executor.submit(
-                                self.get_nodes, bundle_id, is_browser, window_rect
+                                self.get_nodes, bundle_id, is_browser
                             )
                             future_to_bundle_id[new_future] = bundle_id
                         else:
@@ -128,7 +101,7 @@ class Tree:
                             )
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
-    def get_nodes(self, bundle_id: str, is_browser: bool, window_rect=None) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
+    def get_nodes(self, bundle_id: str, is_browser: bool) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         """
         Get interactive and scrollable nodes for an app by bundle_id.
         Tree traversal begins here: starts from each window and recurses via tree_traversal.
@@ -136,7 +109,6 @@ class Tree:
         Args:
             bundle_id: Application bundle identifier.
             is_browser: Whether the app is a browser.
-            window_rect: Optional window bounds for filtering nodes (active window only).
         """
         app = ax.GetRunningApplicationByBundleId(bundle_id)
         if not app:
@@ -147,15 +119,15 @@ class Tree:
         dom_informative_nodes: list[TextElementNode] = []
 
         if menubar:=app.MenuBar:
-            self.tree_traversal(menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser, window_rect)
+            self.tree_traversal(menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser)
         if extras_menubar:=app.ExtrasMenuBar:
-            self.tree_traversal(extras_menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser, window_rect)
+            self.tree_traversal(extras_menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser)
         if main_window := app.MainWindow:
-            self.tree_traversal(main_window, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser, window_rect)
+            self.tree_traversal(main_window, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
         else:
             # Fallback for apps like Dock: content is under app root (e.g. AXList child)
             for child in app.GetChildren():
-                self.tree_traversal(child, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser, window_rect)
+                self.tree_traversal(child, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
     def _dom_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str):
@@ -217,29 +189,20 @@ class Tree:
                     metadata=metadata,
                 ))
 
-    def tree_traversal(self, control: ax.Control, window_name: str, interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode], is_browser: bool, window_rect=None) -> None:
+    def tree_traversal(self, control: ax.Control, window_name: str, interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode], is_browser: bool) -> None:
         """
         Traverse the accessibility tree and collect interactive and scrollable nodes.
 
         All element attributes are fetched in a single batch call per element via
         AXUIElementCopyMultipleAttributeValues, replacing the previous approach of
         making individual GetAttribute calls for each property.
-
-        Args:
-            window_rect: Optional bounding rectangle to filter elements within bounds.
         """
         attrs = ax.GetTraversalBatch(control.Element)
 
         rect = attrs['rect']
         if rect is None:
             for child in control.GetChildren():
-                self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser, window_rect)
-            return
-
-        # Check if element is within window bounds (if window_rect provided)
-        if window_rect and not ax.IsElementWithinWindowBounds(rect, window_rect):
-            for child in control.GetChildren():
-                self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser, window_rect)
+                self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
             return
 
         role = attrs['role']
@@ -267,4 +230,4 @@ class Tree:
                 self._desktop_correction(control, attrs, interactive_nodes, window_name)
 
         for child in control.GetChildren():
-            self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser, window_rect)
+            self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
