@@ -15,7 +15,7 @@
     "type": "python",
     "entry_point": "./src/macos_mcp/__main__.py",
     "mcp_config": {
-      "command": "/Users/jeomon/.local/bin/uv",
+      "command": "uv",
       "args": [
         "--directory",
         "${__dirname}",
