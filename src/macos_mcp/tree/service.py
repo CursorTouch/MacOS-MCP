@@ -24,8 +24,10 @@ class Tree:
 
     def get_state(self, active_window: Window | None) -> TreeState:
         bundle_ids: list[str] = []
+        system_bundle_ids: list[str] = []
         for bundle_id in SYSTEM_UI_BUNDLE_IDS:
             if app := ax.GetRunningApplicationByBundleId(bundle_id):
+                system_bundle_ids.append(app.BundleIdentifier)
                 bundle_ids.append(app.BundleIdentifier)
         if active_window:
             bundle_ids.append(active_window.bundle_id)
@@ -45,7 +47,9 @@ class Tree:
         interactive_nodes, scrollable_nodes, dom_informative_nodes = (
             self.get_window_wise_nodes(
                 bundle_ids=bundle_ids,
-                active_window_rect=active_window_rect
+                active_window_rect=active_window_rect,
+                active_window_bundle_id=active_window.bundle_id if active_window else None,
+                system_bundle_ids=system_bundle_ids
             )
         )
 
@@ -56,10 +60,15 @@ class Tree:
             dom_informative_nodes=dom_informative_nodes,
         )
 
-    def get_window_wise_nodes(self, bundle_ids: list[str], active_window_rect=None) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
+    def get_window_wise_nodes(self, bundle_ids: list[str], active_window_rect=None,
+                              active_window_bundle_id: str | None = None,
+                              system_bundle_ids: list[str] | None = None) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
+
+        if system_bundle_ids is None:
+            system_bundle_ids = []
 
         task_inputs: list[tuple[str, bool]] = []
         for bundle_id in bundle_ids:
@@ -68,10 +77,17 @@ class Tree:
 
         with ThreadPoolExecutor() as executor:
             retry_counts: dict[str, int] = {bid: 0 for bid, _ in task_inputs}
-            future_to_bundle_id: dict = {
-                executor.submit(self.get_nodes, bid, is_browser, active_window_rect): bid
-                for bid, is_browser in task_inputs
-            }
+            future_to_bundle_id: dict = {}
+            for bid, is_browser in task_inputs:
+                # Only pass window_rect for active window, not for system UI
+                window_rect = (
+                    active_window_rect
+                    if bid == active_window_bundle_id and bid not in system_bundle_ids
+                    else None
+                )
+                future = executor.submit(self.get_nodes, bid, is_browser, window_rect)
+                future_to_bundle_id[future] = bid
+
             while future_to_bundle_id:
                 for future in as_completed(list(future_to_bundle_id)):
                     bundle_id = future_to_bundle_id.pop(future)
@@ -94,8 +110,14 @@ class Tree:
                             is_browser = next(
                                 (ib for b, ib in task_inputs if b == bundle_id), False
                             )
+                            window_rect = (
+                                active_window_rect
+                                if bundle_id == active_window_bundle_id
+                                and bundle_id not in system_bundle_ids
+                                else None
+                            )
                             new_future = executor.submit(
-                                self.get_nodes, bundle_id, is_browser, active_window_rect
+                                self.get_nodes, bundle_id, is_browser, window_rect
                             )
                             future_to_bundle_id[new_future] = bundle_id
                         else:
