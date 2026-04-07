@@ -1790,3 +1790,25 @@ def GetRunningApplicationByBundleId(bundle_id: str) -> Optional["ApplicationCont
         if bid and str(bid) == bundle_id:
             return ApplicationControl(pid=app.processIdentifier())
     return None
+
+
+def IsElementWithinWindowBounds(
+    element_rect: "Rect", window_rect: "Rect"
+) -> bool:
+    """
+    Check if an element's bounding box is completely within the window's
+    bounding box. Used to determine visibility based on window viewport.
+
+    Args:
+        element_rect: Element's bounding rectangle.
+        window_rect: Window's bounding rectangle.
+
+    Returns:
+        True if element is fully contained within window bounds, False otherwise.
+    """
+    return (
+        element_rect.left >= window_rect.left
+        and element_rect.top >= window_rect.top
+        and element_rect.right <= window_rect.right
+        and element_rect.bottom <= window_rect.bottom
+    )
