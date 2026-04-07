@@ -44,6 +44,9 @@ from Quartz import (
     CGMainDisplayID,
     CGDisplayPixelsWide,
     CGDisplayPixelsHigh,
+    CGDisplayCopyDisplayMode,
+    CGDisplayModeGetPixelWidth,
+    CGDisplayModeGetPixelHeight,
     CGDisplayBounds,
     CGGetActiveDisplayList,
     CGWindowListCopyWindowInfo,
@@ -707,15 +710,19 @@ def GetScreenSize() -> Tuple[int, int]:
 
     # Fallback to main display
     main_display = CGMainDisplayID()
-    width = CGDisplayPixelsWide(main_display)
-    height = CGDisplayPixelsHigh(main_display)
+    mode = CGDisplayCopyDisplayMode(main_display)
+    width = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
+    height = CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(main_display)
     return (width, height)
 
 
 def GetMainDisplaySize() -> Tuple[int, int]:
     """Get the resolution of the main display. Returns (width, height)."""
     main_display = CGMainDisplayID()
-    return (CGDisplayPixelsWide(main_display), CGDisplayPixelsHigh(main_display))
+    mode = CGDisplayCopyDisplayMode(main_display)
+    width = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
+    height = CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(main_display)
+    return (width, height)
 
 
 def GetDisplayCount() -> int:
@@ -755,7 +762,8 @@ def GetDPIScale() -> float:
     """
     try:
         main_display = CGMainDisplayID()
-        pixel_width = CGDisplayPixelsWide(main_display)
+        mode = CGDisplayCopyDisplayMode(main_display)
+        pixel_width = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
         bounds = CGDisplayBounds(main_display)
         point_width = bounds.size.width
         if point_width > 0:
@@ -786,8 +794,9 @@ def GetPerDisplayInfo() -> list[dict]:
                 bounds = CGDisplayBounds(display_id)
                 lw = bounds.size.width
                 lh = bounds.size.height
-                pw = CGDisplayPixelsWide(display_id)
-                ph = CGDisplayPixelsHigh(display_id)
+                mode = CGDisplayCopyDisplayMode(display_id)
+                pw = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(display_id)
+                ph = CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(display_id)
                 displays.append({
                     'logical_left': bounds.origin.x,
                     'logical_top': bounds.origin.y,
