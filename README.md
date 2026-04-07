@@ -152,55 +152,6 @@ macOS-MCP provides a comprehensive toolset for desktop automation:
 | **Scrape** | Extract and convert webpage content to Markdown format |
 | **Wait** | Pause execution for a defined duration |
 
-## Architecture
-
-macOS-MCP is organized into modular services for clean separation of concerns:
-
-```
-macos-mcp/
-├── src/macos_mcp/
-│   ├── __main__.py                # Entry point, tool registration, server lifecycle
-│   ├── desktop/
-│   │   ├── service.py             # High-level automation orchestration
-│   │   ├── views.py               # Desktop state data structures
-│   │   └── config.py              # Configuration constants
-│   └── tree/
-│       ├── service.py             # Accessibility tree traversal & analysis
-│       ├── views.py               # UI element data structures
-│       └── config.py              # Interactive roles and actions
-├── .github/workflows/             # CI/CD automation
-├── pyproject.toml                 # Project dependencies & metadata
-└── README.md                       # This file
-```
-
-### Key Components
-
-- **Entry Point** (`__main__.py`): Registers MCP tools and initializes server lifecycle
-- **Desktop Service**: High-level automation orchestrator for input, output, and window management
-- **Tree Service**: Traverses macOS accessibility tree to capture and analyze UI elements
-- **Config Modules**: Define supported UI roles, actions, and interactive element types
-
-## How It Works
-
-### 1. Accessibility API Integration
-macOS-MCP leverages the native Accessibility API (`ApplicationServices`) to traverse UI elements without relying on pixel-based detection or vision models. This provides reliable, coordinate-based interaction with any macOS application.
-
-### 2. Parallel UI Scanning
-The Tree Service scans multiple UI sources concurrently for efficiency:
-- Focused application window (primary interaction target)
-- System UI: Dock, menu bar, Control Center
-- System services: Spotlight, SystemUIServer
-- Desktop: Icons and window chrome (when no app is focused)
-
-### 3. Intelligent Context Awareness
-- **Smart Detection**: Recognizes Launchpad state and adjusts scanning behavior
-- **Focused Scoping**: Prioritizes active window but includes system UI elements
-- **Filter Logic**: Excludes background services, shows only user-facing interfaces
-- **Window Hierarchy**: Understands parent-child relationships for accurate interaction
-
-### 4. Visual Feedback (Optional)
-When `use_vision=True`, Snapshot tool generates annotated screenshots with numbered bounding boxes on interactive elements, providing visual context without requiring vision-based decision-making.
-
 ## Limitations
 
 - **Accessibility Requirements**: Manual permission grant required in System Preferences
