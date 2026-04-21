@@ -118,7 +118,7 @@ def app_tool(
 
 @mcp.tool(
     name='Shell',
-    description="Execute commands on macOS. Modes: 'shell' (default) for bash/zsh commands, 'osascript' for AppleScript. Use for file system, process management, system operations, and automation scripts.",
+    description="Execute commands on macOS. Modes: 'shell' (default) for bash/zsh commands, 'osascript' for AppleScript. Use for file system, process management, system operations, and automation scripts. SECURITY WARNING: Commands are executed with the same permissions as the terminal/application running this server. Review and understand all actions before execution, especially those involving file operations, system modifications, or external processes.",
     annotations=ToolAnnotations(
         title="Shell",
         readOnlyHint=False,

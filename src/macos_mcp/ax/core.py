@@ -1637,16 +1637,22 @@ def ExecuteCommand(command: str, mode: str = 'shell', timeout: int = 10) -> Tupl
         Tuple of (output, return_code).
     """
     import os
+    import shlex
     env = os.environ.copy()
     try:
         if mode == 'osascript':
+            escaped_command = command.replace('"', '\\"')
             result = subprocess.run(
-                ['osascript', '-e', command],
+                ['osascript', '-e', escaped_command],
                 capture_output=True, text=True, timeout=timeout, env=env
             )
         else:
+            try:
+                args = shlex.split(command)
+            except ValueError as e:
+                return (f"Invalid command syntax: {e}", -1)
             result = subprocess.run(
-                command, shell=True,
+                args,
                 capture_output=True, text=True, timeout=timeout, env=env
             )
         output = result.stdout or result.stderr or ''

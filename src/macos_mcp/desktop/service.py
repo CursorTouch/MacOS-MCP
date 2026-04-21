@@ -182,7 +182,10 @@ class Desktop:
     def scrape(self, url: str) -> str:
         """Fetch URL content as text."""
         try:
-            r = requests.get(url, timeout=10)
+            headers = {
+                'User-Agent': 'macOS-MCP/0.2.1 (macOS Desktop Automation MCP Server)'
+            }
+            r = requests.get(url, timeout=10, headers=headers)
             r.raise_for_status()
             return r.text
         except Exception as e:
