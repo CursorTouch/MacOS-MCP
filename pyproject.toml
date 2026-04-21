@@ -1,6 +1,6 @@
 [project]
 name = "macos-mcp"
-version = "0.2.1"
+version = "0.2.2"
 description = "MCP Server for interacting with macOS Desktop."
 authors = [
     { name = "Jeomon George", email = "jeogeoalukka@gmail.com" }

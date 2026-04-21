@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.2",
   "name": "MacOS-MCP",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Lightweight MCP Server for macOS desktop interaction",
   "long_description": "MacOS-MCP is a lightweight, open-source MCP server that bridges AI agents with the macOS operating system. It enables LLM agents to perform real-world tasks such as app launching, window management, UI interaction, browser automation, desktop state capture, and shell execution using native macOS accessibility and automation APIs.\n\n**KEY FEATURES**\n- **Native macOS Integration**: Interact with applications, windows, and UI elements through the macOS Accessibility API and Quartz event system.\n- **Bring Your Own LLM/VLM**: Works with any language model and optionally provides visual snapshots when needed.\n- **Rich Toolset for Desktop Automation**: Pre-built tools for application control, mouse and keyboard input, scrolling, shell commands, and desktop state capture.\n- **Lightweight and Open Source**: Minimal setup with a focused Python package and MIT license.\n\n**MINIMUM REQUIREMENTS**\n- Python 3.11 or higher\n- macOS 12 or higher\n- Accessibility permissions granted to the terminal or application running the MCP server\n- UV Package Manager\nThis MCP server uses UV for running the package in a managed Python environment.\nInstallation:\n`curl -LsSf https://astral.sh/uv/install.sh | sh`\nFor detailed installation instructions, [see the UV documentation](https://docs.astral.sh/uv/)",
   "author": {

@@ -183,7 +183,7 @@ class Desktop:
         """Fetch URL content as text."""
         try:
             headers = {
-                'User-Agent': 'macOS-MCP/0.2.1 (macOS Desktop Automation MCP Server)'
+                'User-Agent': 'macOS-MCP/0.2.2 (macOS Desktop Automation MCP Server)'
             }
             r = requests.get(url, timeout=10, headers=headers)
             r.raise_for_status()
