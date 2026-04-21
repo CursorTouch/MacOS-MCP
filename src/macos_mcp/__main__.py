@@ -48,9 +48,10 @@ def _stop_watchdog() -> None:
 
     if watchdog:
         try:
-            watchdog.stop()
+            if watchdog.is_running:
+                watchdog.stop()
         except Exception:
-            logger.exception("Failed to stop watchdog during shutdown")
+            logger.debug("Failed to stop watchdog during shutdown (may have already crashed)")
         finally:
             watchdog = None
 
@@ -78,7 +79,10 @@ async def lifespan(app: FastMCP):
     
     watchdog = WatchDog()
     watchdog.set_focus_callback(desktop.tree.on_focus_changed)
-    watchdog.start()
+    try:
+        watchdog.start()
+    except Exception as e:
+        logger.warning(f"Watchdog failed to start (non-fatal): {e}. Continuing without event monitoring.")
     
     try:
         await asyncio.sleep(0.5)  # Brief startup delay
