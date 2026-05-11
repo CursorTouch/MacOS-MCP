@@ -40,6 +40,7 @@ from .core import (
     Size,
     GetAttribute,
     SetAttribute,
+    GetParameterizedAttribute,
     GetAttributeNames,
     GetActionNames,
     PerformAction,
@@ -627,9 +628,52 @@ class Control:
         return GetAttribute(self.Element, Attribute.VisibleCharacterRange)
 
     @property
+    def StartTextMarker(self):
+        """Get the start text marker."""
+        return GetAttribute(self.Element, Attribute.StartTextMarker)
+
+    @property
+    def EndTextMarker(self):
+        """Get the end text marker."""
+        return GetAttribute(self.Element, Attribute.EndTextMarker)
+
+    @property
+    def SelectedTextMarkerRange(self):
+        """Get the selected text marker range."""
+        return GetAttribute(self.Element, Attribute.SelectedTextMarkerRange)
+
+    @property
     def PlaceholderValue(self) -> str:
         """Get placeholder text (for text fields)."""
         return GetAttribute(self.Element, Attribute.PlaceholderValue) or ''
+
+    def GetTextFromMarkers(self, start_marker: Any = None, end_marker: Any = None) -> str:
+        """
+        Get the text between two text markers.
+        If markers are not provided, uses the element's Start and End markers.
+        """
+        start = start_marker or self.StartTextMarker
+        end = end_marker or self.EndTextMarker
+        
+        if not start or not end:
+            return ''
+            
+        # 1. Create a range from the two markers
+        marker_range = GetParameterizedAttribute(
+            self.Element, 
+            Attribute.TextMarkerRangeForUnorderedTextMarkers, 
+            [start, end]
+        )
+        if not marker_range:
+            return ''
+            
+        # 2. Get the string for that range
+        text = GetParameterizedAttribute(
+            self.Element, 
+            Attribute.StringForTextMarkerRange, 
+            marker_range
+        )
+        return str(text) if text is not None else ''
 
     # =========================================================================
     # Misc Properties

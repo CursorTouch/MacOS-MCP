@@ -93,6 +93,7 @@ from .core import (
     SetAttribute,
     IsAttributeSettable,
     GetAttributeNames,
+    GetParameterizedAttribute,
     GetActionNames,
     PerformAction,
     GetChildCount,

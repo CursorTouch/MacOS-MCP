@@ -78,6 +78,7 @@ from ApplicationServices import (
     AXUIElementIsAttributeSettable,
     AXUIElementCopyElementAtPosition,
     AXUIElementCopyMultipleAttributeValues,
+    AXUIElementCopyParameterizedAttributeValue,
     AXUIElementGetPid,
     AXUIElementSetMessagingTimeout,
     AXIsProcessTrusted,
@@ -269,6 +270,20 @@ def GetAttribute(element: Any, attribute: str) -> Optional[Any]:
     """
     try:
         error, value = AXUIElementCopyAttributeValue(element, attribute, None)
+        if error == kAXErrorSuccess:
+            return value
+    except Exception:
+        pass
+    return None
+
+
+def GetParameterizedAttribute(element: Any, attribute: str, parameter: Any) -> Optional[Any]:
+    """
+    Get a parameterized attribute value from an AXUIElement.
+    Returns None if the attribute is not available or an error occurs.
+    """
+    try:
+        error, value = AXUIElementCopyParameterizedAttributeValue(element, attribute, parameter, None)
         if error == kAXErrorSuccess:
             return value
     except Exception:
