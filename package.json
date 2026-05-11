@@ -1,0 +1,17 @@
+{
+  "name": "macos-mcp-pi-extension",
+  "version": "0.2.3",
+  "private": true,
+  "description": "Pi Agent extension for macOS-MCP desktop automation.",
+  "keywords": ["pi-package", "macos", "mcp", "accessibility", "automation"],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions/macos-mcp.ts"]
+  }
+}
