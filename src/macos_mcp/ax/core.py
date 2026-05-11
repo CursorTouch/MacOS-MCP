@@ -456,6 +456,7 @@ _TRAVERSAL_ATTRIBUTES = [
     Attribute.Description,
     Attribute.Identifier,
     Attribute.Value,
+    Attribute.Children,
 ]
 
 
@@ -496,6 +497,7 @@ def GetTraversalBatch(element: Any) -> dict:
         'value': value,
         'label': label,
         'rect': rect,
+        'children': raw.get(Attribute.Children) or [],
     }
 
 

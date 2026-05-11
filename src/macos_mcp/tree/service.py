@@ -30,6 +30,10 @@ class Tree:
                 system_bundle_ids.append(app.BundleIdentifier)
                 bundle_ids.append(app.BundleIdentifier)
         if active_window:
+            if app:=ax.GetRunningApplicationByBundleId(active_window.bundle_id):
+                ax.SetAttribute(app.Element, "AXEnhancedUserInterface", True)
+                # ax.SetAttribute(app.Element, "AXManualAccessibility", True)
+
             bundle_ids.append(active_window.bundle_id)
 
         interactive_nodes, scrollable_nodes, dom_informative_nodes = (
@@ -114,14 +118,6 @@ class Tree:
         if not app:
             return [], [], []
         
-        # Force exposure of accessibility tree (critical for Electron/Chromium apps like Spotify)
-        try:
-            ax.SetAttribute(app.Element, "AXEnhancedUserInterface", True)
-            ax.SetAttribute(app.Element, "AXManualAccessibility", True)
-        except Exception:
-            # Not all apps support these attributes; ignore failures
-            pass
-
         app_name = app.Name or bundle_id
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
@@ -141,30 +137,33 @@ class Tree:
 
     def _dom_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str):
         if attrs['role'] == "AXLink":
-            first_child = control.GetFirstChildControl()
-            if first_child is not None and first_child.Role == "AXHeading":
-                interactive_nodes.pop()
-                child_attrs = ax.GetTraversalBatch(first_child.Element)
-                if child_attrs['rect']:
-                    bounding_box = BoundingBox.from_bounding_rectangle(child_attrs['rect'])
-                    center = bounding_box.get_center()
-                    metadata = {}
-                    if child_attrs['identifier']:
-                        metadata['axidentifier'] = child_attrs['identifier']
-                    interactive_nodes.append(TreeElementNode(
-                        bounding_box=bounding_box,
-                        center=center,
-                        name=child_attrs['label'] or "",
-                        control_type=child_attrs['role'] or "",
-                        window_name=window_name,
-                        metadata=metadata,
-                    ))
+            children = attrs.get('children', [])
+            if children:
+                first_child = ax.Control(element=children[0])
+                if first_child.Role == "AXHeading":
+                    interactive_nodes.pop()
+                    child_attrs = ax.GetTraversalBatch(first_child.Element)
+                    if child_attrs['rect']:
+                        bounding_box = BoundingBox.from_bounding_rectangle(child_attrs['rect'])
+                        center = bounding_box.get_center()
+                        metadata = {}
+                        if child_attrs['identifier']:
+                            metadata['axidentifier'] = child_attrs['identifier']
+                        interactive_nodes.append(TreeElementNode(
+                            bounding_box=bounding_box,
+                            center=center,
+                            name=child_attrs['label'] or "",
+                            control_type=child_attrs['role'] or "",
+                            window_name=window_name,
+                            metadata=metadata,
+                        ))
 
     def _desktop_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str):
         role = attrs['role']
         rect = attrs['rect']
         if role in ["AXCell", "AXGroup"]:
-            current_child = control.GetFirstChildControl()
+            children = attrs.get('children', [])
+            current_child = ax.Control(element=children[0]) if children else None
             found_static_text = None
             while current_child:
                 if current_child.Role == "AXStaticText":
@@ -217,8 +216,8 @@ class Tree:
 
         rect = attrs['rect']
         if rect is None:
-            for child in control.GetChildren():
-                self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
+            for child_element in attrs['children']:
+                self.tree_traversal(ax.Control(element=child_element), window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
             return
 
         role = attrs['role']
@@ -245,5 +244,5 @@ class Tree:
             else:
                 self._desktop_correction(control, attrs, interactive_nodes, window_name)
 
-        for child in control.GetChildren():
-            self.tree_traversal(child, window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
+        for child_element in attrs['children']:
+            self.tree_traversal(ax.Control(element=child_element), window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
