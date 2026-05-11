@@ -317,6 +317,7 @@ class Attribute:
     LabelValue = 'AXLabelValue'
     LabelUIElements = 'AXLabelUIElements'
     PlaceholderValue = 'AXPlaceholderValue'
+    Language = 'AXLanguage'
     Actions = 'AXActions'
     ColumnTitles = 'AXColumnTitles'
     EditableAncestor = 'AXEditableAncestor'

@@ -12,8 +12,6 @@ THREAD_MAX_RETRIES = 3
 
 
 class Tree:
-
-
     def on_focus_changed(self, element, notification: str, pid: int) -> None:
         """
         Callback invoked by WatchDog when focus changes (FocusedUIElementChanged,
@@ -209,7 +207,7 @@ class Tree:
                     window_name=window_name,
                     metadata=metadata,
                 ))
-        elif role == "AXButton" and not attrs['label']:
+        elif role == "AXButton":
             subrole = attrs['subrole']
             if subrole in WINDOW_CONTROL_SUBROLES:
                 node=interactive_nodes.pop()
@@ -247,7 +245,7 @@ class Tree:
             return
 
         role = attrs['role']
-        subrole = attrs['subrole']
+        # subrole = attrs['subrole']
         is_visible = not attrs['hidden'] and (rect.width > 1 and rect.height > 1)
         is_enabled = attrs['enabled']
         has_help_text = bool(attrs['help'])
@@ -264,10 +262,12 @@ class Tree:
             center = bounding_box.get_center()
             metadata = {}
             if role == "AXTextField" or role == "AXComboBox":
-                if placeholder := control.PlaceholderValue:
+                if placeholder := attrs['placeholder']:
                     metadata['placeholder'] = placeholder
-            if role == "AXLink":
-                if url := control.URL:   
+                if value := attrs['value']:
+                    metadata['value'] = value
+            elif role == "AXLink":
+                if url := attrs['url']:   
                     metadata['url'] = url
 
             if attrs.get('identifier'):

@@ -643,6 +643,11 @@ class Control:
         return GetAttribute(self.Element, Attribute.SelectedTextMarkerRange)
 
     @property
+    def Language(self) -> str:
+        """Get the language of the element."""
+        return GetAttribute(self.Element, Attribute.Language) or ''
+
+    @property
     def PlaceholderValue(self) -> str:
         """Get placeholder text (for text fields)."""
         return GetAttribute(self.Element, Attribute.PlaceholderValue) or ''

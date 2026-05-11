@@ -466,11 +466,16 @@ _TRAVERSAL_ATTRIBUTES = [
     Attribute.Size,
     Attribute.Hidden,
     Attribute.Enabled,
+    Attribute.Focused,
+    Attribute.Selected,
     Attribute.Help,
     Attribute.Title,
     Attribute.Description,
     Attribute.Identifier,
     Attribute.Value,
+    Attribute.PlaceholderValue,
+    Attribute.URL,
+    Attribute.Language,
     Attribute.Children,
 ]
 
@@ -500,16 +505,26 @@ def GetTraversalBatch(element: Any) -> dict:
     value_str = str(value) if value is not None else ''
     label = title  or description or value_str or identifier
 
+    url = raw.get(Attribute.URL)
+    url_str = str(url) if url is not None else None
+    
+    placeholder = raw.get(Attribute.PlaceholderValue)
+    placeholder_str = str(placeholder) if placeholder is not None else None
+
     return {
         'role': raw.get(Attribute.Role) or '',
         'subrole': raw.get(Attribute.Subrole) or '',
         'hidden': raw.get(Attribute.Hidden) is True,
         'enabled': raw.get(Attribute.Enabled) is not False,
+        'focused': raw.get(Attribute.Focused) is True,
+        'selected': raw.get(Attribute.Selected) is True,
         'help': raw.get(Attribute.Help) or '',
         'title': title,
         'description': description,
         'identifier': identifier,
         'value': value,
+        'placeholder': placeholder_str,
+        'url': url_str,
         'label': label,
         'rect': rect,
         'children': raw.get(Attribute.Children) or [],
