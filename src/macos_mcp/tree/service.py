@@ -47,7 +47,7 @@ class Tree:
         )
 
     def get_window_wise_nodes(self, bundle_ids: list[str],
-                              system_bundle_ids: list[str] | None = None) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
+        system_bundle_ids: list[str] | None = None) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
@@ -113,6 +113,15 @@ class Tree:
         app = ax.GetRunningApplicationByBundleId(bundle_id)
         if not app:
             return [], [], []
+        
+        # Force exposure of accessibility tree (critical for Electron/Chromium apps like Spotify)
+        try:
+            ax.SetAttribute(app.Element, "AXEnhancedUserInterface", True)
+            ax.SetAttribute(app.Element, "AXManualAccessibility", True)
+        except Exception:
+            # Not all apps support these attributes; ignore failures
+            pass
+
         app_name = app.Name or bundle_id
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
@@ -154,7 +163,7 @@ class Tree:
     def _desktop_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str):
         role = attrs['role']
         rect = attrs['rect']
-        if role in ["AXCell", "AXGroup"] and not attrs.get("label"):
+        if role in ["AXCell", "AXGroup"]:
             current_child = control.GetFirstChildControl()
             found_static_text = None
             while current_child:
@@ -173,7 +182,7 @@ class Tree:
                 interactive_nodes.append(TreeElementNode(
                     bounding_box=bounding_box,
                     center=center,
-                    name=found_static_text.Label or "",
+                    name=found_static_text.Value or "",
                     control_type=role,
                     window_name=window_name,
                     metadata=metadata,
@@ -195,7 +204,7 @@ class Tree:
                     window_name=window_name,
                     metadata=metadata,
                 ))
-                
+
     def tree_traversal(self, control: ax.Control, window_name: str, interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode], is_browser: bool) -> None:
         """
         Traverse the accessibility tree and collect interactive and scrollable nodes.
