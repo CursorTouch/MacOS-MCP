@@ -6,3 +6,4 @@ experiments
 .claude
 *.ipynb
 *.mcpb
+node_modules

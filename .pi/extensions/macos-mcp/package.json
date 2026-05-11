@@ -1,0 +1,9 @@
+{
+  "name": "pi-macos-mcp-extension",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "typebox": "1.1.38"
+  }
+}

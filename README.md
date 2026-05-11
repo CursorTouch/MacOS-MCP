@@ -145,6 +145,66 @@ The `Snapshot` tool requires Screen Recording permissions to capture screenshots
 </details>
 
 <details>
+  <summary><strong>Pi Agent</strong></summary>
+
+  Pi does not ship with built-in MCP support, but macOS-MCP can be installed as a Pi package. The package starts this MCP server over stdio and exposes convenient Pi tools that wrap the existing macOS-MCP tools.
+
+  **One-line global setup:**
+
+  ```shell
+  pi install git:github.com/CursorTouch/MacOS-MCP
+  ```
+
+  After install, restart Pi or run:
+
+  ```text
+  /reload
+  ```
+
+  **Try without installing:**
+
+  ```shell
+  pi -e git:github.com/CursorTouch/MacOS-MCP
+  ```
+
+  **Local checkout setup:**
+
+  ```shell
+  git clone https://github.com/CursorTouch/MacOS-MCP.git
+  cd MacOS-MCP
+  uv sync
+  npm install
+  pi
+  ```
+
+  If you copied only the extension into another Pi project, run Pi from the macOS-MCP checkout or set:
+
+  ```shell
+  export MACOS_MCP_ROOT=/path/to/MacOS-MCP
+  ```
+
+  The extension exposes these Pi tools:
+
+  | Pi Tool | Purpose |
+  |---------|---------|
+  | `mac_snapshot` | Read current macOS UI state through the existing Snapshot tool. |
+  | `mac_app` | Launch, switch, move, or resize macOS applications/windows. |
+  | `mac_click` | Click coordinates returned by `mac_snapshot`. |
+  | `mac_type` | Type text at coordinates returned by `mac_snapshot`. |
+  | `mac_shortcut` | Run keyboard shortcuts such as `command+c` or `command+space`. |
+  | `mac_scroll` | Scroll at the current pointer or coordinates. |
+  | `mac_wait` | Wait for UI changes/loading. |
+
+  Recommended agent workflow:
+  - Call `mac_snapshot` first.
+  - Use the coordinates returned by Snapshot with `mac_click`, `mac_type`, and `mac_scroll`.
+  - Use screenshots/vision only when Accessibility data is missing or ambiguous.
+
+  The extension auto-detects the macOS-MCP checkout when installed as a Pi package. If you use a manually copied extension, set `MACOS_MCP_ROOT=/path/to/MacOS-MCP`.
+
+</details>
+
+<details>
   <summary><strong>Other Integrations</strong></summary>
 
   Any client supporting the Model Context Protocol can integrate macOS-MCP by configuring the `uvx macos-mcp` command in their MCP server settings.
@@ -164,9 +224,8 @@ macOS-MCP provides a comprehensive toolset for desktop automation:
 | **Scroll** | Scroll vertically or horizontally in focused window or regions |
 | **Move** | Move mouse pointer or drag to coordinates |
 | **Shortcut** | Press keyboard shortcuts (Cmd+C, Cmd+Tab, etc.) |
-| **Snapshot** | Capture desktop state with interactive elements and coordinates. Set `use_vision=True` for annotated screenshots |
 | **App** | Launch applications, manage windows (resize/move), switch between apps. Supports app names and bundle IDs |
-| **Shell** | Execute shell commands or AppleScript. Use `mode='osascript'` for AppleScript |
+| **Shell** | Execute commands or AppleScript. Use `mode='osascript'` for AppleScript |
 | **Scrape** | Extract and convert webpage content to Markdown format |
 | **Wait** | Pause execution for a defined duration |
 
