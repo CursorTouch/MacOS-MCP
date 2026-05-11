@@ -91,3 +91,12 @@ WINDOW_CONTROL_SUBROLES = {
     'AXZoomButton': 'Zoom Button',
     'AXFullScreenButton': 'Full Screen Button',
 }
+# Roles that should be skipped during tree traversal to improve performance
+PRUNABLE_ROLES = {
+    'AXScrollBar',
+    'AXGrowArea',
+    'AXUnknown',
+    'AXValueIndicator',
+    'AXLevelIndicator',
+    'AXProgressIndicator',
+}

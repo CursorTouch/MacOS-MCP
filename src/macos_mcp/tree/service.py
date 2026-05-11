@@ -1,6 +1,7 @@
-from macos_mcp.tree.config import INTERACTIVE_ACTIONS, INTERACTIVE_ROLES, CONTAINER_ROLES, SCROLLABLE_ROLES, WINDOW_CONTROL_SUBROLES
+from macos_mcp.tree.config import INTERACTIVE_ACTIONS, INTERACTIVE_ROLES, CONTAINER_ROLES, SCROLLABLE_ROLES, WINDOW_CONTROL_SUBROLES, PRUNABLE_ROLES
 from macos_mcp.tree.views import TreeState, TreeElementNode, ScrollElementNode, TextElementNode, BoundingBox, Center
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import deque
 from macos_mcp.desktop.config import BROWSER_BUNDLE_IDS, SYSTEM_UI_BUNDLE_IDS
 from macos_mcp.desktop.views import Status, Window
 import macos_mcp.ax as ax
@@ -118,6 +119,10 @@ class Tree:
         if not app:
             return [], [], []
         
+        # Optimization: Set a short timeout for AX messaging to prevent hanging on slow/unresponsive apps
+        # Default is usually around 6 seconds; 0.5s is plenty for most well-behaved apps.
+        ax.SetMessagingTimeout(app.Element, 0.5)
+        
         app_name = app.Name or bundle_id
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
@@ -154,14 +159,15 @@ class Tree:
             )
         return BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
 
-    def _dom_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str, main_window_bounding_box: BoundingBox | None = None):
+    def _dom_correction(self, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str, main_window_bounding_box: BoundingBox | None = None):
         if attrs['role'] == "AXLink":
             children = attrs.get('children', [])
             if children:
-                first_child = ax.Control(element=children[0])
-                if first_child.Role == "AXHeading":
+                first_child_element = children[0]
+                # Optimization: Check role before doing a full batch fetch
+                if ax.GetAttribute(first_child_element, ax.Attribute.Role) == "AXHeading":
                     interactive_nodes.pop()
-                    child_attrs = ax.GetTraversalBatch(first_child.Element)
+                    child_attrs = ax.GetTraversalBatch(first_child_element)
                     if child_attrs['rect']:
                         bounding_box = BoundingBox.from_bounding_rectangle(child_attrs['rect'])
                         if main_window_bounding_box:
@@ -179,22 +185,32 @@ class Tree:
                             metadata=metadata,
                         ))
 
-    def _desktop_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str, main_window_bounding_box: BoundingBox | None = None):
+    def _desktop_correction(self, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str, main_window_bounding_box: BoundingBox | None = None):
         role = attrs['role']
         rect = attrs['rect']
         if role in ["AXCell", "AXGroup"]:
             children = attrs.get('children', [])
-            current_child = ax.Control(element=children[0]) if children else None
-            found_static_text = None
-            while current_child:
-                if current_child.Role == "AXStaticText":
-                    found_static_text = current_child
+            current_element = children[0] if children else None
+            found_static_text_value = None
+            
+            while current_element:
+                # Optimization: Single IPC call for Role, Value, and Children to continue traversal
+                batch = ax.GetMultipleAttributeValues(current_element, [
+                    ax.Attribute.Role, 
+                    ax.Attribute.Value, 
+                    ax.Attribute.Children
+                ])
+                
+                if batch.get(ax.Attribute.Role) == "AXStaticText":
+                    found_static_text_value = batch.get(ax.Attribute.Value) or ""
                     break
-                current_child = current_child.GetFirstChildControl()
+                
+                next_children = batch.get(ax.Attribute.Children)
+                current_element = next_children[0] if next_children else None
 
-            if found_static_text:
-                node=interactive_nodes.pop()
-                metadata=node.metadata
+            if found_static_text_value is not None:
+                node = interactive_nodes.pop()
+                metadata = node.metadata
                 bounding_box = BoundingBox.from_bounding_rectangle(rect)
                 if main_window_bounding_box:
                     bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
@@ -202,7 +218,7 @@ class Tree:
                 interactive_nodes.append(TreeElementNode(
                     bounding_box=bounding_box,
                     center=center,
-                    name=found_static_text.Value or "",
+                    name=found_static_text_value,
                     control_type=role,
                     window_name=window_name,
                     metadata=metadata,
@@ -226,67 +242,81 @@ class Tree:
                 ))
 
     def tree_traversal(
-        self, control: ax.Control, window_name: str, 
+        self, root_control: ax.Control, window_name: str, 
         interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode],
-        main_window_bounding_box:BoundingBox|None=None,is_browser: bool=False) -> None:
+        main_window_bounding_box: BoundingBox | None = None, is_browser: bool = False
+    ) -> None:
         """
-        Traverse the accessibility tree and collect interactive and scrollable nodes.
+        Traverse the accessibility tree iteratively and collect interactive and scrollable nodes.
 
-        All element attributes are fetched in a single batch call per element via
-        AXUIElementCopyMultipleAttributeValues, replacing the previous approach of
-        making individual GetAttribute calls for each property.
+        Uses an explicit stack to avoid recursion depth issues and reduce call overhead.
+        Attributes are fetched in batches to minimize IPC calls.
         """
-        attrs = ax.GetTraversalBatch(control.Element)
+        # Stack stores (element_ref, is_browser_flag)
+        stack = deque([(root_control.Element, is_browser)])
+        
+        while stack:
+            element, current_is_browser = stack.pop()
+            attrs = ax.GetTraversalBatch(element)
 
-        rect = attrs['rect']
-        if rect is None:
-            for child_element in attrs['children']:
-                self.tree_traversal(ax.Control(element=child_element), window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, main_window_bounding_box, is_browser)
-            return
+            rect = attrs['rect']
+            children = attrs['children']
 
-        role = attrs['role']
-        # subrole = attrs['subrole']
-        is_visible = not attrs['hidden'] and (rect.width > 1 and rect.height > 1)
-        is_enabled = attrs['enabled']
-        has_help_text = bool(attrs['help'])
-        has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
-        is_interactive = ((has_roles and is_enabled) or has_help_text) and is_visible
+            if rect is None:
+                # Traverse children even if container has no rect
+                for child_element in reversed(children):
+                    stack.append((child_element, current_is_browser))
+                continue
 
-        bounding_box = BoundingBox.from_bounding_rectangle(rect)
-        if main_window_bounding_box:
-            bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
-            if bounding_box.width == 0 or bounding_box.height == 0:
-                return
+            role = attrs['role']
+            
+            # Optimization: Prune subtrees that are definitely not useful
+            if attrs['hidden'] or role in PRUNABLE_ROLES:
+                continue
 
-        if is_interactive:
-            center = bounding_box.get_center()
-            metadata = {}
-            if role == "AXTextField" or role == "AXComboBox":
-                if placeholder := attrs['placeholder']:
-                    metadata['placeholder'] = placeholder
-                if value := attrs['value']:
-                    metadata['value'] = value
-            elif role == "AXLink":
-                if url := attrs['url']:   
-                    metadata['url'] = url
+            is_visible = (rect.width > 1 and rect.height > 1)
+            is_enabled = attrs['enabled']
+            has_help_text = bool(attrs['help'])
+            has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
+            is_interactive = ((has_roles and is_enabled) or has_help_text) and is_visible
 
-            if attrs.get('identifier'):
-                metadata['axidentifier'] = attrs['identifier']
+            bounding_box = BoundingBox.from_bounding_rectangle(rect)
+            if main_window_bounding_box:
+                bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
+                if bounding_box.width == 0 or bounding_box.height == 0:
+                    # Prune subtree if parent is outside window
+                    continue
 
-            interactive_nodes.append(
-                TreeElementNode(
-                    bounding_box=bounding_box,
-                    center=center,
-                    name=attrs['label'],
-                    control_type=role,
-                    window_name=window_name,
-                    metadata=metadata,
+            if is_interactive:
+                center = bounding_box.get_center()
+                metadata = {}
+                if role == "AXTextField" or role == "AXComboBox":
+                    if placeholder := attrs['placeholder']:
+                        metadata['placeholder'] = placeholder
+                    if value := attrs['value']:
+                        metadata['value'] = value
+                elif role == "AXLink":
+                    if url := attrs['url']:   
+                        metadata['url'] = url
+
+                if attrs.get('identifier'):
+                    metadata['axidentifier'] = attrs['identifier']
+
+                interactive_nodes.append(
+                    TreeElementNode(
+                        bounding_box=bounding_box,
+                        center=center,
+                        name=attrs['label'],
+                        control_type=role,
+                        window_name=window_name,
+                        metadata=metadata,
+                    )
                 )
-            )
-            if is_browser:
-                self._dom_correction(control, attrs, interactive_nodes, window_name, main_window_bounding_box)
-            else:
-                self._desktop_correction(control, attrs, interactive_nodes, window_name, main_window_bounding_box)
+                if current_is_browser:
+                    self._dom_correction(attrs, interactive_nodes, window_name, main_window_bounding_box)
+                else:
+                    self._desktop_correction(attrs, interactive_nodes, window_name, main_window_bounding_box)
 
-        for child_element in attrs['children']:
-            self.tree_traversal(ax.Control(element=child_element), window_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, main_window_bounding_box, is_browser)
+            # Add children to stack in reverse to maintain left-to-right processing order
+            for child_element in reversed(children):
+                stack.append((child_element, current_is_browser))
