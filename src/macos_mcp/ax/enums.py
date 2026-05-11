@@ -248,6 +248,9 @@ class Attribute:
     InsertionPointLineNumber = 'AXInsertionPointLineNumber'
     SharedTextUIElements = 'AXSharedTextUIElements'
     SharedCharacterRange = 'AXSharedCharacterRange'
+    StartTextMarker = 'AXStartTextMarker'
+    EndTextMarker = 'AXEndTextMarker'
+    SelectedTextMarkerRange = 'AXSelectedTextMarkerRange'
 
     # Window-specific attributes
     Main = 'AXMain'
@@ -332,6 +335,10 @@ class Attribute:
     AttributedStringForRange = 'AXAttributedStringForRangeParameterized'
     RTFForRange = 'AXRTFForRangeParameterized'
     StyleRangeForIndex = 'AXStyleRangeForIndexParameterized'
+    StringForTextMarkerRange = 'AXStringForTextMarkerRangeParameterized'
+    AttributedStringForTextMarkerRange = 'AXAttributedStringForTextMarkerRangeParameterized'
+    BoundsForTextMarkerRange = 'AXBoundsForTextMarkerRangeParameterized'
+    TextMarkerRangeForUnorderedTextMarkers = 'AXTextMarkerRangeForUnorderedTextMarkersParameterized'
 
     # Date/Time field attributes
     AMPMField = 'AXAMPMField'

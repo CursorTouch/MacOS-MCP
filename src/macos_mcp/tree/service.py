@@ -195,14 +195,12 @@ class Tree:
                 current_child = current_child.GetFirstChildControl()
 
             if found_static_text:
-                interactive_nodes.pop()
+                node=interactive_nodes.pop()
+                metadata=node.metadata
                 bounding_box = BoundingBox.from_bounding_rectangle(rect)
                 if main_window_bounding_box:
                     bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
                 center = bounding_box.get_center()
-                metadata = {}
-                if attrs.get('identifier'):
-                    metadata['axidentifier'] = attrs['identifier']
                 interactive_nodes.append(TreeElementNode(
                     bounding_box=bounding_box,
                     center=center,
@@ -214,14 +212,12 @@ class Tree:
         elif role == "AXButton" and not attrs['label']:
             subrole = attrs['subrole']
             if subrole in WINDOW_CONTROL_SUBROLES:
-                interactive_nodes.pop()
+                node=interactive_nodes.pop()
+                metadata=node.metadata
                 element_bounding_box = BoundingBox.from_bounding_rectangle(rect)
                 if main_window_bounding_box:
                     element_bounding_box = self.iou_bounding_box(main_window_bounding_box, element_bounding_box)
                 center = element_bounding_box.get_center()
-                metadata = {}
-                if attrs['identifier']:
-                    metadata['axidentifier'] = attrs['identifier']
                 interactive_nodes.append(TreeElementNode(
                     bounding_box=element_bounding_box,
                     center=center,
@@ -256,7 +252,7 @@ class Tree:
         is_enabled = attrs['enabled']
         has_help_text = bool(attrs['help'])
         has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
-        is_interactive = ((has_roles and is_enabled) or has_help_text) and is_visible and (attrs['label'] or (attrs['subrole'] in WINDOW_CONTROL_SUBROLES))
+        is_interactive = ((has_roles and is_enabled) or has_help_text) and is_visible
 
         bounding_box = BoundingBox.from_bounding_rectangle(rect)
         if main_window_bounding_box:
@@ -266,6 +262,17 @@ class Tree:
 
         if is_interactive:
             center = bounding_box.get_center()
+            metadata = {}
+            if role == "AXTextField" or role == "AXComboBox":
+                if placeholder := control.PlaceholderValue:
+                    metadata['placeholder'] = placeholder
+            if role == "AXLink":
+                if url := control.URL:   
+                    metadata['url'] = url
+
+            if attrs.get('identifier'):
+                metadata['axidentifier'] = attrs['identifier']
+
             interactive_nodes.append(
                 TreeElementNode(
                     bounding_box=bounding_box,
@@ -273,6 +280,7 @@ class Tree:
                     name=attrs['label'],
                     control_type=role,
                     window_name=window_name,
+                    metadata=metadata,
                 )
             )
             if is_browser:
