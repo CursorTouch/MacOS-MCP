@@ -99,9 +99,11 @@ class Tree:
                             future_to_bundle_id[new_future] = bundle_id
                         else:
                             logger.error(
-                                "Task failed for bundle %s after %d retries",
+                                "Task failed for bundle %s after %d retries. Exact error: %s",
                                 bundle_id,
                                 THREAD_MAX_RETRIES,
+                                e,
+                                exc_info=True
                             )
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
@@ -124,17 +126,17 @@ class Tree:
         dom_informative_nodes: list[TextElementNode] = []
 
         if menubar:=app.MenuBar:
-            self.tree_traversal(menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser)
+            self.tree_traversal(menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser=is_browser)
         if extras_menubar:=app.ExtrasMenuBar:
-            self.tree_traversal(extras_menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser)
+            self.tree_traversal(extras_menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser=is_browser)
         if main_window := app.MainWindow:
             if main_window_rect:=main_window.BoundingRectangle:
                 main_window_bounding_box=BoundingBox.from_bounding_rectangle(main_window_rect)
-                self.tree_traversal(main_window, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, main_window_bounding_box, is_browser)
+                self.tree_traversal(main_window, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, main_window_bounding_box=main_window_bounding_box, is_browser=is_browser)
         else:
             # Fallback for apps like Dock: content is under app root (e.g. AXList child)
             for child in app.GetChildren():
-                self.tree_traversal(child, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser)
+                self.tree_traversal(child, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser=is_browser)
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
     def iou_bounding_box(self, window_box: BoundingBox, element_box: BoundingBox) -> BoundingBox:
