@@ -154,19 +154,26 @@ class Tree:
     def _desktop_correction(self, control: ax.Control, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str):
         role = attrs['role']
         rect = attrs['rect']
-        if role == "AXCell":
-            first_child = control.GetFirstChildControl()
-            if first_child is not None and first_child.Role == "AXStaticText":
+        if role in ["AXCell", "AXGroup"] and not attrs.get("label"):
+            current_child = control.GetFirstChildControl()
+            found_static_text = None
+            while current_child:
+                if current_child.Role == "AXStaticText":
+                    found_static_text = current_child
+                    break
+                current_child = current_child.GetFirstChildControl()
+
+            if found_static_text:
                 interactive_nodes.pop()
                 bounding_box = BoundingBox.from_bounding_rectangle(rect)
                 center = bounding_box.get_center()
                 metadata = {}
-                if attrs['identifier']:
+                if attrs.get('identifier'):
                     metadata['axidentifier'] = attrs['identifier']
                 interactive_nodes.append(TreeElementNode(
                     bounding_box=bounding_box,
                     center=center,
-                    name=first_child.Label or "",
+                    name=found_static_text.Label or "",
                     control_type=role,
                     window_name=window_name,
                     metadata=metadata,
@@ -188,7 +195,7 @@ class Tree:
                     window_name=window_name,
                     metadata=metadata,
                 ))
-
+                
     def tree_traversal(self, control: ax.Control, window_name: str, interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode], is_browser: bool) -> None:
         """
         Traverse the accessibility tree and collect interactive and scrollable nodes.

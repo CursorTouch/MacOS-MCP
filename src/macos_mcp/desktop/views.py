@@ -36,7 +36,7 @@ class Window:
 class DesktopState:
     active_window: Window|None
     windows: list[Window]
-    screenshot: [Union[Image, bytes, None]]=None
+    screenshot: Union[Image, bytes, None]=None
     tree_state: TreeState|None=None
 
     def windows_to_string(self) -> str:

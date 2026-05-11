@@ -482,7 +482,7 @@ def GetTraversalBatch(element: Any) -> dict:
     description = raw.get(Attribute.Description) or ''
     value = raw.get(Attribute.Value)
     value_str = str(value) if value is not None else ''
-    label = title or identifier or description or value_str
+    label = title  or description or value_str or identifier
 
     return {
         'role': raw.get(Attribute.Role) or '',
