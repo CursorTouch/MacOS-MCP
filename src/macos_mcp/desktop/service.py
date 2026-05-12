@@ -264,32 +264,34 @@ class Desktop:
         except Exception:
             window = None
         if window is None:
-            if app.BundleIdentifier != FINDER_BUNDLE_ID:
-                # Active app has no window — fall back to Finder
-                app = ax.GetRunningApplicationByBundleId(FINDER_BUNDLE_ID)
-                if app is None:
-                    return None
-                try:
-                    window = app.MainWindow
-                except Exception:
-                    window = None
-            if window is None:
-                # Finder is active but has no open window (desktop-only state).
-                # Return a windowless Window so the tree still scans Finder's desktop.
-                bundle_id = app.BundleIdentifier or FINDER_BUNDLE_ID
-                status_str = app.Status
-                try:
-                    status = Status(status_str)
-                except ValueError:
-                    status = Status.ACTIVE
+            bundle_id = app.BundleIdentifier or FINDER_BUNDLE_ID
+            status_str = app.Status
+            try:
+                status = Status(status_str)
+            except ValueError:
+                status = Status.ACTIVE
+            if bundle_id != FINDER_BUNDLE_ID:
+                # Non-Finder app is active but has no visible window (e.g. minimized).
+                # Return it as-is so the tree scans its menu bar correctly.
+                # The tree service will separately scan Finder's desktop icons.
                 return Window(
-                    name="Finder",
-                    is_browser=False,
+                    name=app.Name or bundle_id,
+                    is_browser=bundle_id in BROWSER_BUNDLE_IDS,
                     status=status,
                     bounding_box=BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0),
                     pid=app.PID,
                     bundle_id=bundle_id,
                 )
+            # Finder is active but has no open window (desktop-only state).
+            # Return a windowless Finder Window so the tree still scans the desktop.
+            return Window(
+                name="Finder",
+                is_browser=False,
+                status=status,
+                bounding_box=BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0),
+                pid=app.PID,
+                bundle_id=bundle_id,
+            )
         is_browser = app.BundleIdentifier in BROWSER_BUNDLE_IDS
         rect = window.BoundingRectangle
         if rect:

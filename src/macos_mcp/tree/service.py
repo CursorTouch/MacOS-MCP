@@ -34,8 +34,10 @@ class Tree:
         logger.debug("Focus changed: notification=%s pid=%d", notification, pid)
 
     def get_state(self, active_window: Window | None) -> TreeState:
+        FINDER_BUNDLE_ID = "com.apple.finder"
         bundle_ids: list[str] = []
         system_bundle_ids: list[str] = []
+        desktop_only_bundle_ids: list[str] = []
         for bundle_id in SYSTEM_UI_BUNDLE_IDS:
             if app := ax.GetRunningApplicationByBundleId(bundle_id):
                 system_bundle_ids.append(app.BundleIdentifier)
@@ -43,12 +45,23 @@ class Tree:
         if active_window:
             if app := ax.GetRunningApplicationByBundleId(active_window.bundle_id):
                 ax.SetAttribute(app.Element, "AXEnhancedUserInterface", True)
-
             bundle_ids.append(active_window.bundle_id)
+            # When a non-Finder app is active but has no visible window (e.g. minimized),
+            # also scan Finder's desktop icons — but skip Finder's menu bar so we don't
+            # show Finder menus while another app owns the menu bar.
+            is_windowless = (
+                active_window.bundle_id != FINDER_BUNDLE_ID
+                and active_window.bounding_box.width == 0
+                and active_window.bounding_box.height == 0
+            )
+            if is_windowless:
+                desktop_only_bundle_ids.append(FINDER_BUNDLE_ID)
 
         interactive_nodes, scrollable_nodes, dom_informative_nodes = (
             self.get_window_wise_nodes(
-                bundle_ids=bundle_ids, system_bundle_ids=system_bundle_ids
+                bundle_ids=bundle_ids,
+                system_bundle_ids=system_bundle_ids,
+                desktop_only_bundle_ids=desktop_only_bundle_ids,
             )
         )
 
@@ -60,7 +73,10 @@ class Tree:
         )
 
     def get_window_wise_nodes(
-        self, bundle_ids: list[str], system_bundle_ids: list[str] | None = None
+        self,
+        bundle_ids: list[str],
+        system_bundle_ids: list[str] | None = None,
+        desktop_only_bundle_ids: list[str] | None = None,
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
@@ -68,17 +84,23 @@ class Tree:
 
         if system_bundle_ids is None:
             system_bundle_ids = []
+        if desktop_only_bundle_ids is None:
+            desktop_only_bundle_ids = []
 
-        task_inputs: list[tuple[str, bool]] = []
+        task_inputs: list[tuple[str, bool, bool]] = []
         for bundle_id in bundle_ids:
             is_browser = bundle_id in BROWSER_BUNDLE_IDS
-            task_inputs.append((bundle_id, is_browser))
+            task_inputs.append((bundle_id, is_browser, False))
+        for bundle_id in desktop_only_bundle_ids:
+            if bundle_id not in bundle_ids:
+                is_browser = bundle_id in BROWSER_BUNDLE_IDS
+                task_inputs.append((bundle_id, is_browser, True))
 
         with ThreadPoolExecutor() as executor:
-            retry_counts: dict[str, int] = {bid: 0 for bid, _ in task_inputs}
+            retry_counts: dict[str, int] = {bid: 0 for bid, _, __ in task_inputs}
             future_to_bundle_id: dict = {}
-            for bid, is_browser in task_inputs:
-                future = executor.submit(self.get_nodes, bid, is_browser)
+            for bid, is_browser, desktop_only in task_inputs:
+                future = executor.submit(self.get_nodes, bid, is_browser, desktop_only)
                 future_to_bundle_id[future] = bid
 
             while future_to_bundle_id:
@@ -101,10 +123,13 @@ class Tree:
                         )
                         if retry_counts[bundle_id] < THREAD_MAX_RETRIES:
                             is_browser = next(
-                                (ib for b, ib in task_inputs if b == bundle_id), False
+                                (ib for b, ib, _ in task_inputs if b == bundle_id), False
+                            )
+                            desktop_only = next(
+                                (do for b, _, do in task_inputs if b == bundle_id), False
                             )
                             new_future = executor.submit(
-                                self.get_nodes, bundle_id, is_browser
+                                self.get_nodes, bundle_id, is_browser, desktop_only
                             )
                             future_to_bundle_id[new_future] = bundle_id
                         else:
@@ -118,7 +143,7 @@ class Tree:
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
     def get_nodes(
-        self, bundle_id: str, is_browser: bool
+        self, bundle_id: str, is_browser: bool, desktop_only: bool = False
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         """
         Get interactive and scrollable nodes for an app by bundle_id.
@@ -127,6 +152,8 @@ class Tree:
         Args:
             bundle_id: Application bundle identifier.
             is_browser: Whether the app is a browser.
+            desktop_only: When True, skip menu bar scanning (used for Finder desktop
+                          items when another app owns the menu bar).
         """
         app = ax.GetRunningApplicationByBundleId(bundle_id)
         if not app:
@@ -141,24 +168,25 @@ class Tree:
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
 
-        if menubar := app.MenuBar:
-            self.tree_traversal(
-                menubar,
-                app_name,
-                interactive_nodes,
-                scrollable_nodes,
-                [],
-                is_browser=is_browser,
-            )
-        if extras_menubar := app.ExtrasMenuBar:
-            self.tree_traversal(
-                extras_menubar,
-                app_name,
-                interactive_nodes,
-                scrollable_nodes,
-                [],
-                is_browser=is_browser,
-            )
+        if not desktop_only:
+            if menubar := app.MenuBar:
+                self.tree_traversal(
+                    menubar,
+                    app_name,
+                    interactive_nodes,
+                    scrollable_nodes,
+                    [],
+                    is_browser=is_browser,
+                )
+            if extras_menubar := app.ExtrasMenuBar:
+                self.tree_traversal(
+                    extras_menubar,
+                    app_name,
+                    interactive_nodes,
+                    scrollable_nodes,
+                    [],
+                    is_browser=is_browser,
+                )
         if main_window := app.MainWindow:
             if main_window_rect := main_window.BoundingRectangle:
                 main_window_bounding_box = BoundingBox.from_bounding_rectangle(
@@ -174,16 +202,42 @@ class Tree:
                     is_browser=is_browser,
                 )
         else:
-            # Fallback for apps like Dock: content is under app root (e.g. AXList child)
-            for child in app.GetChildren():
-                self.tree_traversal(
-                    child,
-                    app_name,
-                    interactive_nodes,
-                    scrollable_nodes,
-                    dom_informative_nodes,
-                    is_browser=is_browser,
-                )
+            # MainWindow is None. Distinguish three cases:
+            # 1. App has visible non-minimized windows (e.g. Finder desktop) — scan them.
+            # 2. All windows are minimized — skip to avoid scanning invisible content.
+            # 3. App has no windows at all (e.g. Dock) — scan children as fallback.
+            all_windows = app.Windows
+            visible_windows = [
+                w for w in all_windows
+                if not ax.GetAttribute(w.Element, "AXMinimized")
+            ]
+            if visible_windows:
+                for window in visible_windows:
+                    window_rect = window.BoundingRectangle
+                    window_bbox = (
+                        BoundingBox.from_bounding_rectangle(window_rect)
+                        if window_rect
+                        else None
+                    )
+                    self.tree_traversal(
+                        window,
+                        app_name,
+                        interactive_nodes,
+                        scrollable_nodes,
+                        dom_informative_nodes,
+                        main_window_bounding_box=window_bbox,
+                        is_browser=is_browser,
+                    )
+            elif not all_windows:
+                for child in app.GetChildren():
+                    self.tree_traversal(
+                        child,
+                        app_name,
+                        interactive_nodes,
+                        scrollable_nodes,
+                        dom_informative_nodes,
+                        is_browser=is_browser,
+                    )
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
     def iou_bounding_box(
