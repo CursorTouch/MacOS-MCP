@@ -50,12 +50,12 @@ class Desktop:
 
     def app(
         self,
-        mode: Literal['launch', 'resize', 'switch'] = 'launch',
+        mode: Literal['launch', 'resize', 'move', 'switch'] = 'launch',
         name: Optional[str] = None,
         window_loc: Optional[Tuple[int, int]] = None,
         window_size: Optional[Tuple[int, int]] = None,
     ) -> str:
-        """Manage applications: launch, resize, or switch focus."""
+        """Manage applications: launch, resize, move, or switch focus."""
         if mode == 'launch':
             if not name:
                 return "App name or bundle ID required for launch."
@@ -74,11 +74,19 @@ class Desktop:
             if not app or not app.MainWindow:
                 return "No frontmost window to resize."
             win = app.MainWindow
-            if window_loc:
-                win.MoveWindowTo(float(window_loc[0]), float(window_loc[1]))
-            if window_size:
-                win.Resize(float(window_size[0]), float(window_size[1]))
-            return "Window resized/moved."
+            if not window_size:
+                return "window_size required for resize mode."
+            win.Resize(float(window_size[0]), float(window_size[1]))
+            return "Window resized."
+        if mode == 'move':
+            app = ax.GetFrontmostApplication()
+            if not app or not app.MainWindow:
+                return "No frontmost window to move."
+            win = app.MainWindow
+            if not window_loc:
+                return "window_loc required for move mode."
+            win.MoveWindowTo(float(window_loc[0]), float(window_loc[1]))
+            return "Window moved."
         return f"Unknown mode: {mode}"
 
     def execute_command(

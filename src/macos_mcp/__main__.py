@@ -96,7 +96,7 @@ mcp = FastMCP(name='macos-mcp', instructions=instructions, lifespan=lifespan)
 
 @mcp.tool(
     name="App",
-    description="Manages macOS applications with three modes: 'launch' (opens the application), 'resize' (adjusts active window size/position), 'switch' (brings specific app into focus).",
+    description="Manages macOS applications with four modes: 'launch' (opens the application), 'resize' (adjusts active window size), 'move' (repositions active window), 'switch' (brings specific app into focus).",
     annotations=ToolAnnotations(
         title="App",
         readOnlyHint=False,
@@ -106,7 +106,7 @@ mcp = FastMCP(name='macos-mcp', instructions=instructions, lifespan=lifespan)
     )
 )
 def app_tool(
-    mode: Literal['launch', 'resize', 'switch']='launch',
+    mode: Literal['launch', 'resize', 'move', 'switch']='launch',
     name: str | None = None,
     window_loc: list[int] | None = None,
     window_size: list[int] | None = None,
