@@ -7,3 +7,5 @@ experiments
 *.ipynb
 *.mcpb
 node_modules
+dist/
+*.egg-info/

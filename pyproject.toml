@@ -8,6 +8,18 @@ authors = [
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11"
+keywords = ["mcp", "macos", "accessibility", "automation", "ai", "llm"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Desktop Environment",
+    "Intended Audience :: Developers",
+    "Development Status :: 4 - Beta",
+]
 dependencies = [
     "pyobjc-framework-ApplicationServices",
     "pyobjc-framework-Cocoa",
@@ -22,6 +34,11 @@ dependencies = [
     "notebook",
     "ipywidgets",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jeomon/MacOS-MCP"
+Issues = "https://github.com/jeomon/MacOS-MCP/issues"
+Changelog = "https://github.com/jeomon/MacOS-MCP/releases"
 
 [project.scripts]
 macos-mcp = "macos_mcp.__main__:main"
