@@ -65,11 +65,12 @@ NON_INTERACTIVE_ROLES = {
 SCROLLABLE_ROLES = {
     'AXScrollArea',
     'AXScrollView',
-    'AXTable',
-    'AXList',
-    'AXOutline',
+    'AXWebArea',
+    # 'AXTable',
+    # 'AXList',
+    # 'AXOutline',
     'AXBrowser',
-    'AXTextArea',
+    # 'AXTextArea',
 }
 
 # Actions that indicate an element is interactive
