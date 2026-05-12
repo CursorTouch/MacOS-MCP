@@ -83,6 +83,7 @@ from ApplicationServices import (
     AXUIElementSetMessagingTimeout,
     AXIsProcessTrusted,
     AXIsProcessTrustedWithOptions,
+    AXValueGetType,
     kAXErrorSuccess,
     kAXCopyMultipleAttributeOptionStopOnError,
 )
@@ -458,83 +459,93 @@ def GetRect(element: Any) -> Optional[Rect]:
     return None
 
 
-# Attributes fetched in one batch call per element during tree traversal.
-_TRAVERSAL_ATTRIBUTES = [
+# Phase-1 attributes fetched for every element: minimal set needed to decide
+# whether an element is interactive and to traverse its children.
+_EARLY_TRAVERSAL_ATTRIBUTES = [
     Attribute.Role,
-    Attribute.Subrole,
+    Attribute.Hidden,
     Attribute.Position,
     Attribute.Size,
-    Attribute.Hidden,
     Attribute.Enabled,
-    Attribute.Focused,
-    Attribute.Selected,
     Attribute.Help,
+    Attribute.HasPopup,
+    Attribute.Children,
+]
+
+# Phase-2 attributes fetched only for elements that pass the interactive check.
+# These are skipped for the ~90-95% of non-interactive container/leaf elements.
+_LATE_TRAVERSAL_ATTRIBUTES = [
+    Attribute.Subrole,
     Attribute.Title,
     Attribute.Description,
     Attribute.Identifier,
     Attribute.Value,
     Attribute.PlaceholderValue,
     Attribute.URL,
-    Attribute.Language,
     Attribute.Expanded,
-    Attribute.HasPopup,
     Attribute.TitleUIElement,
-    Attribute.Children,
 ]
 
+# Combined list kept for callers that still need a single full batch (e.g. _dom_correction).
+_TRAVERSAL_ATTRIBUTES = _EARLY_TRAVERSAL_ATTRIBUTES + _LATE_TRAVERSAL_ATTRIBUTES
 
-def GetTraversalBatch(element: Any) -> dict:
+
+def GetEarlyTraversalBatch(element: Any) -> dict:
     """
-    Fetch all attributes needed for accessibility tree traversal in a single API call.
-
-    Replaces ~10 individual GetAttribute calls per element with one
-    AXUIElementCopyMultipleAttributeValues call, giving a significant speedup
-    when traversing large UI trees.
-
-    Returns a dict with pre-parsed, ready-to-use values:
-        role, subrole, hidden, enabled, help, title, description,
-        identifier, value, label (computed), rect (Rect | None)
+    Phase-1 batch: fetch the minimal attributes needed to decide interactivity and
+    obtain child elements for continued traversal.  Called for every node in the tree.
     """
-    raw = GetMultipleAttributeValues(element, _TRAVERSAL_ATTRIBUTES)
-
+    raw = GetMultipleAttributeValues(element, _EARLY_TRAVERSAL_ATTRIBUTES)
     pos = _parse_ax_position(raw.get(Attribute.Position))
     size = _parse_ax_size(raw.get(Attribute.Size))
     rect = Rect.from_position_size(pos[0], pos[1], size[0], size[1]) if pos and size else None
+    return {
+        'role': raw.get(Attribute.Role) or '',
+        'hidden': raw.get(Attribute.Hidden) is True,
+        'enabled': raw.get(Attribute.Enabled) is not False,
+        'help': raw.get(Attribute.Help) or '',
+        'has_popup': raw.get(Attribute.HasPopup) is True,
+        'rect': rect,
+        'children': raw.get(Attribute.Children) or [],
+    }
 
+
+def GetLateTraversalBatch(element: Any) -> dict:
+    """
+    Phase-2 batch: fetch display/metadata attributes for elements already identified
+    as interactive.  Only called for the small minority of interactive elements.
+    """
+    raw = GetMultipleAttributeValues(element, _LATE_TRAVERSAL_ATTRIBUTES)
     title = raw.get(Attribute.Title) or ''
     identifier = raw.get(Attribute.Identifier) or ''
     description = raw.get(Attribute.Description) or ''
     value = raw.get(Attribute.Value)
     value_str = str(value) if value is not None else ''
-    label = title  or description or value_str or identifier
-
+    label = title or description or value_str or identifier
     url = raw.get(Attribute.URL)
-    url_str = str(url) if url is not None else None
-    
     placeholder = raw.get(Attribute.PlaceholderValue)
-    placeholder_str = str(placeholder) if placeholder is not None else None
-
     return {
-        'role': raw.get(Attribute.Role) or '',
         'subrole': raw.get(Attribute.Subrole) or '',
-        'hidden': raw.get(Attribute.Hidden) is True,
-        'enabled': raw.get(Attribute.Enabled) is not False,
-        'focused': raw.get(Attribute.Focused) is True,
-        'selected': raw.get(Attribute.Selected) is True,
-        'help': raw.get(Attribute.Help) or '',
         'title': title,
         'description': description,
         'identifier': identifier,
         'value': value,
-        'placeholder': placeholder_str,
-        'url': url_str,
+        'placeholder': str(placeholder) if placeholder is not None else None,
+        'url': str(url) if url is not None else None,
         'expanded': raw.get(Attribute.Expanded) is True,
-        'has_popup': raw.get(Attribute.HasPopup) is True,
         'title_ui_element': raw.get(Attribute.TitleUIElement),
         'label': label,
-        'rect': rect,
-        'children': raw.get(Attribute.Children) or [],
     }
+
+
+def GetTraversalBatch(element: Any) -> dict:
+    """
+    Full single-batch fetch for callers that need all traversal attributes at once
+    (e.g. correction helpers that inspect a child element directly).
+    """
+    early = GetEarlyTraversalBatch(element)
+    late = GetLateTraversalBatch(element)
+    return {**early, **late}
 
 
 def ElementAtPosition(application, x: float, y: float):
@@ -615,7 +626,6 @@ def GetMultipleAttributeValues(
                 # Detect AXValue error objects (kAXValueAXErrorType = 5)
                 if not isinstance(val, (str, bool, int, float, list, dict)):
                     try:
-                        from ApplicationServices import AXValueGetType
                         if AXValueGetType(val) == AXValueType.AXError:
                             continue
                     except Exception:

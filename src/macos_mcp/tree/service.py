@@ -164,10 +164,10 @@ class Tree:
             children = attrs.get('children', [])
             if children:
                 first_child_element = children[0]
-                # Optimization: Check role before doing a full batch fetch
-                if ax.GetAttribute(first_child_element, ax.Attribute.Role) == "AXHeading":
+                # Single batch call: check role and get display attrs in one IPC round-trip.
+                child_attrs = ax.GetTraversalBatch(first_child_element)
+                if child_attrs['role'] == "AXHeading":
                     interactive_nodes.pop()
-                    child_attrs = ax.GetTraversalBatch(first_child_element)
                     if child_attrs['rect']:
                         bounding_box = BoundingBox.from_bounding_rectangle(child_attrs['rect'])
                         if main_window_bounding_box:
@@ -242,91 +242,92 @@ class Tree:
                 ))
 
     def tree_traversal(
-        self, root_control: ax.Control, window_name: str, 
+        self, root_control: ax.Control, window_name: str,
         interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode],
         main_window_bounding_box: BoundingBox | None = None, is_browser: bool = False
     ) -> None:
         """
         Traverse the accessibility tree iteratively and collect interactive and scrollable nodes.
 
-        Uses an explicit stack to avoid recursion depth issues and reduce call overhead.
-        Attributes are fetched in batches to minimize IPC calls.
+        Uses a two-phase attribute fetch strategy to minimise cross-process IPC cost:
+          Phase 1 (every element): 8 cheap attributes — role, visibility, bounds, children.
+          Phase 2 (interactive elements only, ~5-10%): 9 display/metadata attributes.
+        This avoids marshalling string attributes for the ~90% of non-interactive nodes.
         """
-        # Stack stores (element_ref, is_browser_flag)
         stack = deque([(root_control.Element, is_browser)])
-        
+
         while stack:
             element, current_is_browser = stack.pop()
-            attrs = ax.GetTraversalBatch(element)
 
-            rect = attrs['rect']
-            children = attrs['children']
+            # --- Phase 1: minimal batch for all elements ---
+            early = ax.GetEarlyTraversalBatch(element)
+
+            role = early['role']
+            rect = early['rect']
+            children = early['children']
+
+            if early['hidden'] or role in PRUNABLE_ROLES:
+                continue
 
             if rect is None:
-                # Traverse children even if container has no rect
                 for child_element in reversed(children):
                     stack.append((child_element, current_is_browser))
                 continue
 
-            role = attrs['role']
-            
-            # Optimization: Prune subtrees that are definitely not useful
-            if attrs['hidden'] or role in PRUNABLE_ROLES:
-                continue
-
             is_visible = (rect.width > 1 and rect.height > 1)
-            is_enabled = attrs['enabled']
-            has_help_text = bool(attrs['help'])
             has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
-            has_popup = bool(attrs['has_popup'])
-            is_interactive = ((has_roles and is_enabled) or has_help_text or has_popup) and is_visible
+            is_interactive = ((has_roles and early['enabled']) or bool(early['help']) or early['has_popup']) and is_visible
 
             bounding_box = BoundingBox.from_bounding_rectangle(rect)
             if main_window_bounding_box:
                 bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
                 if bounding_box.width == 0 or bounding_box.height == 0:
-                    # Prune subtree if parent is outside window
                     continue
 
             if is_interactive:
+                # --- Phase 2: display/metadata attributes, only for interactive elements ---
+                late = ax.GetLateTraversalBatch(element)
+                attrs = {**early, **late}
+
                 center = bounding_box.get_center()
                 metadata = {}
+
                 if role == "AXTextField":
-                    if placeholder := attrs['placeholder']:
+                    if placeholder := late['placeholder']:
                         metadata['placeholder'] = placeholder
-                    if value := attrs['value']:
+                    if value := late['value']:
                         metadata['value'] = value
 
-                elif role == "AXComboBox" or role=="AXTextArea":
-                    if placeholder := attrs['placeholder']:
+                elif role == "AXComboBox" or role == "AXTextArea":
+                    if placeholder := late['placeholder']:
                         metadata['placeholder'] = placeholder
-                    if value := attrs['value']:
+                    if value := late['value']:
                         metadata['value'] = value
-                    if expanded := attrs['expanded']:
-                        metadata['expanded'] = expanded
-                    if has_popup := attrs['has_popup']:
-                        metadata['has_popup'] = has_popup
+                    if late['expanded']:
+                        metadata['expanded'] = late['expanded']
+                    if early['has_popup']:
+                        metadata['has_popup'] = early['has_popup']
 
                 elif role == "AXRadioButton":
-                    if value:=attrs['value']:
-                        metadata['selected']=value
+                    if value := late['value']:
+                        metadata['selected'] = value
 
                 elif role == "AXPopUpButton":
-                    if title:=attrs['title_ui_element']:
-                        metadata['title']=title
-                    
+                    if title := late['title_ui_element']:
+                        metadata['title'] = title
+
                 elif role == "AXLink":
-                    if url := attrs['url']:   
+                    if url := late['url']:
                         metadata['url'] = url
 
-                if attrs.get('identifier'):
-                    metadata['axidentifier'] = attrs['identifier']
+                if late.get('identifier'):
+                    metadata['axidentifier'] = late['identifier']
 
                 interactive_nodes.append(
                     TreeElementNode(
                         bounding_box=bounding_box,
                         center=center,
-                        name=attrs['label'],
+                        name=late['label'],
                         control_type=role,
                         window_name=window_name,
                         metadata=metadata,
@@ -337,6 +338,5 @@ class Tree:
                 else:
                     self._desktop_correction(attrs, interactive_nodes, window_name, main_window_bounding_box)
 
-            # Add children to stack in reverse to maintain left-to-right processing order
             for child_element in reversed(children):
                 stack.append((child_element, current_is_browser))

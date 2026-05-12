@@ -105,6 +105,8 @@ from .core import (
     ElementAtPosition,
     GetElementPid,
     GetMultipleAttributeValues,
+    GetEarlyTraversalBatch,
+    GetLateTraversalBatch,
     GetTraversalBatch,
     GetAttributeValues,
     GetActionDescription,
