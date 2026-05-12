@@ -327,7 +327,7 @@ def scrape_tool(url: str, ctx: Context = None) -> str:
 
 @mcp.tool(
     name='Notification',
-    description="Sends a macOS notification banner. Provide message (required) and optionally title, subtitle, and sound name (e.g. 'Glass', 'Ping', 'Basso', 'Tink').",
+    description="Sends a macOS notification banner with a message, title, optional subtitle, and optional sound.",
     annotations=ToolAnnotations(
         title="Notification",
         readOnlyHint=False,
@@ -340,7 +340,7 @@ def notification_tool(
     message: str,
     title: str = "Notification",
     subtitle: str | None = None,
-    sound: str | None = None,
+    sound: Literal['Glass', 'Ping', 'Basso', 'Tink', 'Funk', 'Bottle', 'Frog', 'Hero', 'Morse', 'Pop', 'Purr', 'Sosumi', 'Submarine'] | None = None,
     ctx: Context = None
 ) -> str:
     return desktop.notify(message, title, subtitle, sound)
