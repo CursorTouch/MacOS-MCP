@@ -1,6 +1,6 @@
 {
   "name": "macos-mcp-pi-extension",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Pi Agent extension for macOS-MCP desktop automation.",
   "keywords": ["pi-package", "macos", "mcp", "accessibility", "automation"],
