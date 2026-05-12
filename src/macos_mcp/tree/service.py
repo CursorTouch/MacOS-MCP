@@ -355,5 +355,16 @@ class Tree:
                 else:
                     self._desktop_correction(attrs, interactive_nodes, window_name, main_window_bounding_box)
 
+            if role in SCROLLABLE_ROLES and is_visible:
+                late = ax.GetLateTraversalBatch(element)
+                scroll_label=late['label']
+                scrollable_nodes.append(ScrollElementNode(
+                    name=scroll_label,
+                    control_type=role,
+                    window_name=window_name,
+                    bounding_box=bounding_box,
+                    center=bounding_box.get_center(),
+                ))
+
             for child_element in reversed(children):
                 stack.append((child_element, current_is_browser))
