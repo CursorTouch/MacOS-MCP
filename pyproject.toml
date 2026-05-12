@@ -35,6 +35,13 @@ dependencies = [
     "ipywidgets",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-mock>=3.11.0",
+    "pytest-cov>=4.1.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/jeomon/MacOS-MCP"
 Issues = "https://github.com/jeomon/MacOS-MCP/issues"
@@ -52,3 +59,14 @@ packages = ["src/macos_mcp"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers"
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+]
