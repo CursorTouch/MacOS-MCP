@@ -324,6 +324,7 @@ class Attribute:
     LinkedUIElements = 'AXLinkedUIElements'
     TitleUIElement = 'AXTitleUIElement'
     ServesAsTitleForUIElements = 'AXServesAsTitleForUIElements'
+    HasPopup = 'AXHasPopup'
     IsApplicationRunning = 'AXIsApplicationRunning'
 
     # Parameterized attributes (text)

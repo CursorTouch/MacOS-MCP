@@ -476,6 +476,9 @@ _TRAVERSAL_ATTRIBUTES = [
     Attribute.PlaceholderValue,
     Attribute.URL,
     Attribute.Language,
+    Attribute.Expanded,
+    Attribute.HasPopup,
+    Attribute.TitleUIElement,
     Attribute.Children,
 ]
 
@@ -525,6 +528,9 @@ def GetTraversalBatch(element: Any) -> dict:
         'value': value,
         'placeholder': placeholder_str,
         'url': url_str,
+        'expanded': raw.get(Attribute.Expanded) is True,
+        'has_popup': raw.get(Attribute.HasPopup) is True,
+        'title_ui_element': raw.get(Attribute.TitleUIElement),
         'label': label,
         'rect': rect,
         'children': raw.get(Attribute.Children) or [],

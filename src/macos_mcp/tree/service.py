@@ -278,7 +278,8 @@ class Tree:
             is_enabled = attrs['enabled']
             has_help_text = bool(attrs['help'])
             has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
-            is_interactive = ((has_roles and is_enabled) or has_help_text) and is_visible
+            has_popup = bool(attrs['has_popup'])
+            is_interactive = ((has_roles and is_enabled) or has_help_text or has_popup) and is_visible
 
             bounding_box = BoundingBox.from_bounding_rectangle(rect)
             if main_window_bounding_box:
@@ -290,11 +291,30 @@ class Tree:
             if is_interactive:
                 center = bounding_box.get_center()
                 metadata = {}
-                if role == "AXTextField" or role == "AXComboBox":
+                if role == "AXTextField":
                     if placeholder := attrs['placeholder']:
                         metadata['placeholder'] = placeholder
                     if value := attrs['value']:
                         metadata['value'] = value
+
+                elif role == "AXComboBox" or role=="AXTextArea":
+                    if placeholder := attrs['placeholder']:
+                        metadata['placeholder'] = placeholder
+                    if value := attrs['value']:
+                        metadata['value'] = value
+                    if expanded := attrs['expanded']:
+                        metadata['expanded'] = expanded
+                    if has_popup := attrs['has_popup']:
+                        metadata['has_popup'] = has_popup
+
+                elif role == "AXRadioButton":
+                    if value:=attrs['value']:
+                        metadata['selected']=value
+
+                elif role == "AXPopUpButton":
+                    if title:=attrs['title_ui_element']:
+                        metadata['title']=title
+                    
                 elif role == "AXLink":
                     if url := attrs['url']:   
                         metadata['url'] = url
