@@ -8,6 +8,7 @@ import macos_mcp.ax as ax
 import requests
 import logging
 import random
+import json
 import io
 import os
 import time
@@ -97,6 +98,25 @@ class Desktop:
     ) -> Tuple[str, int]:
         """Execute a shell or AppleScript command."""
         return ax.ExecuteCommand(command, mode=mode, timeout=timeout)
+
+    def notify(
+        self,
+        message: str,
+        title: str = "Notification",
+        subtitle: Optional[str] = None,
+        sound: Optional[str] = None,
+    ) -> str:
+        """Send a macOS notification banner."""
+        import subprocess
+        script = f'display notification {json.dumps(message)} with title {json.dumps(title)}'
+        if subtitle:
+            script += f' subtitle {json.dumps(subtitle)}'
+        if sound:
+            script += f' sound name {json.dumps(sound)}'
+        result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+        if result.returncode == 0:
+            return f"Notification sent: [{title}] {message}"
+        return f"Failed to send notification: {result.stderr.strip()}"
 
     def click(
         self,

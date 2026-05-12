@@ -325,6 +325,27 @@ def scrape_tool(url: str, ctx: Context = None) -> str:
     return f'URL:{url}\nContent:\n{content}'
 
 
+@mcp.tool(
+    name='Notification',
+    description="Sends a macOS notification banner. Provide message (required) and optionally title, subtitle, and sound name (e.g. 'Glass', 'Ping', 'Basso', 'Tink').",
+    annotations=ToolAnnotations(
+        title="Notification",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False
+    )
+)
+def notification_tool(
+    message: str,
+    title: str = "Notification",
+    subtitle: str | None = None,
+    sound: str | None = None,
+    ctx: Context = None
+) -> str:
+    return desktop.notify(message, title, subtitle, sound)
+
+
 @click.command()
 @click.option(
     "--transport",
