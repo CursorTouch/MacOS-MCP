@@ -328,6 +328,7 @@ class Attribute:
     # Misc attributes
     Document = "AXDocument"
     URL = "AXURL"
+    Filename = "AXFilename"
     LabelValue = "AXLabelValue"
     LabelUIElements = "AXLabelUIElements"
     PlaceholderValue = "AXPlaceholderValue"

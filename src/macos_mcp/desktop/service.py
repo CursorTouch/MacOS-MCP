@@ -232,12 +232,21 @@ class Desktop:
         time.sleep(duration)
 
     def get_foreground_window(self) -> Optional[Window]:
+        FINDER_BUNDLE_ID = "com.apple.finder"
         app = ax.GetFrontmostApplication()
+        if app is None:
+            app = ax.GetRunningApplicationByBundleId(FINDER_BUNDLE_ID)
         if app is None:
             return None
         window = app.MainWindow
         if window is None:
-            return None
+            if app.BundleIdentifier != FINDER_BUNDLE_ID:
+                app = ax.GetRunningApplicationByBundleId(FINDER_BUNDLE_ID)
+                if app is None:
+                    return None
+                window = app.MainWindow
+            if window is None:
+                return None
         is_browser = app.BundleIdentifier in BROWSER_BUNDLE_IDS
         rect = window.BoundingRectangle
         if rect:

@@ -522,6 +522,7 @@ _LATE_TRAVERSAL_ATTRIBUTES = [
     Attribute.Value,
     Attribute.PlaceholderValue,
     Attribute.URL,
+    Attribute.Filename,
     Attribute.Expanded,
 ]
 
@@ -568,6 +569,7 @@ def GetLateTraversalBatch(element: Any) -> dict:
     value_str = str(value) if value is not None else ""
     label = title or description or value_str or identifier
     url = raw.get(Attribute.URL)
+    filename = raw.get(Attribute.Filename)
     placeholder = raw.get(Attribute.PlaceholderValue)
     return {
         "subrole": raw.get(Attribute.Subrole) or "",
@@ -577,6 +579,7 @@ def GetLateTraversalBatch(element: Any) -> dict:
         "value": value,
         "placeholder": str(placeholder) if placeholder is not None else None,
         "url": str(url) if url is not None else None,
+        "filename": str(filename) if filename is not None else None,
         "expanded": raw.get(Attribute.Expanded) is True,
         "label": label,
     }

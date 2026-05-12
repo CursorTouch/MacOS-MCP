@@ -424,7 +424,15 @@ class Tree:
 
                 elif role == "AXLink":
                     if url := late["url"]:
-                        metadata["url"] = url
+                        if url.startswith(("file://", "http://", "https://")):
+                            metadata["url"] = url
+
+                elif role == "AXImage":
+                    if filename := late["filename"]:
+                        metadata["filename"] = filename
+                    if url := late["url"]:
+                        if url.startswith(("file://", "http://", "https://")):
+                            metadata["url"] = url
 
                 if late.get("identifier"):
                     metadata["axidentifier"] = late["identifier"]
