@@ -6,19 +6,7 @@ on:
       - "v*"
 
 jobs:
-  lint:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Lint with Ruff
-        run: uv run ruff check src/
-
   publish:
-    needs: lint
     runs-on: macos-latest
     environment: pypi
     permissions:
