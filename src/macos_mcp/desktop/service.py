@@ -233,20 +233,63 @@ class Desktop:
 
     def get_foreground_window(self) -> Optional[Window]:
         FINDER_BUNDLE_ID = "com.apple.finder"
-        app = ax.GetFrontmostApplication()
+        time.sleep(0.05)
+        # Use menu bar owner as source of truth — it always matches what the user sees
+        # in the menu bar and correctly reflects focus even when a background app still
+        # has a layer-0 window (e.g. antigravity still open but not frontmost).
+        pid = ax.GetMenuBarOwningApplication()
+        if not pid:
+            pid = ax.GetForegroundWindowPID()
+        if not pid:
+            pid_from_app = ax.GetFrontmostApplication()
+            if pid_from_app:
+                try:
+                    pid = pid_from_app.PID
+                except Exception:
+                    pid = None
+        app = None
+        if pid:
+            try:
+                from macos_mcp.ax.controls import ApplicationControl
+                app = ApplicationControl(pid=pid)
+            except Exception:
+                app = None
         if app is None:
             app = ax.GetRunningApplicationByBundleId(FINDER_BUNDLE_ID)
         if app is None:
             return None
-        window = app.MainWindow
+        window = None
+        try:
+            window = app.MainWindow
+        except Exception:
+            window = None
         if window is None:
             if app.BundleIdentifier != FINDER_BUNDLE_ID:
+                # Active app has no window — fall back to Finder
                 app = ax.GetRunningApplicationByBundleId(FINDER_BUNDLE_ID)
                 if app is None:
                     return None
-                window = app.MainWindow
+                try:
+                    window = app.MainWindow
+                except Exception:
+                    window = None
             if window is None:
-                return None
+                # Finder is active but has no open window (desktop-only state).
+                # Return a windowless Window so the tree still scans Finder's desktop.
+                bundle_id = app.BundleIdentifier or FINDER_BUNDLE_ID
+                status_str = app.Status
+                try:
+                    status = Status(status_str)
+                except ValueError:
+                    status = Status.ACTIVE
+                return Window(
+                    name="Finder",
+                    is_browser=False,
+                    status=status,
+                    bounding_box=BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0),
+                    pid=app.PID,
+                    bundle_id=bundle_id,
+                )
         is_browser = app.BundleIdentifier in BROWSER_BUNDLE_IDS
         rect = window.BoundingRectangle
         if rect:
