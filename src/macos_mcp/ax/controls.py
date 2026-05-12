@@ -15,14 +15,6 @@ from typing import Any, Callable, List, Optional, Union
 from ApplicationServices import (
     AXUIElementCreateApplication,
     AXUIElementCreateSystemWide,
-    AXUIElementCopyAttributeValue,
-    AXUIElementSetAttributeValue,
-    AXUIElementPerformAction,
-    AXUIElementCopyAttributeNames,
-    AXUIElementCopyActionNames,
-    AXUIElementIsAttributeSettable,
-    AXUIElementGetAttributeValueCount,
-    kAXErrorSuccess,
 )
 
 from .enums import (
@@ -30,7 +22,6 @@ from .enums import (
     Subrole,
     Attribute,
     Action,
-    AXError,
     ActivationPolicyNames,
 )
 
@@ -160,7 +151,9 @@ class Control:
     # Lazy Search: Exists / Refind
     # =========================================================================
 
-    def Exists(self, maxSearchSeconds: float = 5.0, searchIntervalSeconds: float = 0.5) -> bool:
+    def Exists(
+        self, maxSearchSeconds: float = 5.0, searchIntervalSeconds: float = 0.5
+    ) -> bool:
         """
         Check if this control exists by searching for it.
         Retries up to maxSearchSeconds.
@@ -180,7 +173,9 @@ class Control:
 
         # Ensure parent exists first
         if self._searchFromControl._element is None:
-            if not self._searchFromControl.Exists(maxSearchSeconds, searchIntervalSeconds):
+            if not self._searchFromControl.Exists(
+                maxSearchSeconds, searchIntervalSeconds
+            ):
                 return False
 
         start_time = time.monotonic()
@@ -195,7 +190,9 @@ class Control:
             else:
                 return False
 
-    def Refind(self, maxSearchSeconds: float = 5.0, raiseException: bool = True) -> bool:
+    def Refind(
+        self, maxSearchSeconds: float = 5.0, raiseException: bool = True
+    ) -> bool:
         """
         Re-find this control, clearing any cached element.
 
@@ -210,7 +207,7 @@ class Control:
         if not self.Exists(maxSearchSeconds, self._searchInterval):
             if raiseException:
                 desc = self._get_search_description()
-                raise LookupError(f'Find Control Timeout({maxSearchSeconds}s): {desc}')
+                raise LookupError(f"Find Control Timeout({maxSearchSeconds}s): {desc}")
             return False
         return True
 
@@ -226,10 +223,15 @@ class Control:
 
         results = []
         _find_recursive_raw(
-            parent_element, results,
-            self._searchRole, self._searchSubrole,
-            self._searchTitle, self._searchIdentifier,
-            self._searchPredicate, self._searchDepth, 0,
+            parent_element,
+            results,
+            self._searchRole,
+            self._searchSubrole,
+            self._searchTitle,
+            self._searchIdentifier,
+            self._searchPredicate,
+            self._searchDepth,
+            0,
             find_first=(self._foundIndex <= 1),
         )
 
@@ -242,16 +244,16 @@ class Control:
         """Get a human-readable description of the search parameters."""
         parts = []
         if self._searchRole:
-            parts.append(f'Role={self._searchRole!r}')
+            parts.append(f"Role={self._searchRole!r}")
         if self._searchTitle:
-            parts.append(f'Title={self._searchTitle!r}')
+            parts.append(f"Title={self._searchTitle!r}")
         if self._searchSubrole:
-            parts.append(f'Subrole={self._searchSubrole!r}')
+            parts.append(f"Subrole={self._searchSubrole!r}")
         if self._searchIdentifier:
-            parts.append(f'Identifier={self._searchIdentifier!r}')
+            parts.append(f"Identifier={self._searchIdentifier!r}")
         if self._searchPredicate:
-            parts.append('Predicate=<custom>')
-        return '{' + ', '.join(parts) + '}' if parts else '{}'
+            parts.append("Predicate=<custom>")
+        return "{" + ", ".join(parts) + "}" if parts else "{}"
 
     @staticmethod
     def _wrap(element) -> Control:
@@ -265,22 +267,22 @@ class Control:
     @property
     def Role(self) -> str:
         """Get the role of this element (e.g., 'AXButton', 'AXTextField')."""
-        return GetAttribute(self.Element, Attribute.Role) or ''
+        return GetAttribute(self.Element, Attribute.Role) or ""
 
     @property
     def Subrole(self) -> str:
         """Get the subrole of this element (e.g., 'AXCloseButton')."""
-        return GetAttribute(self.Element, Attribute.Subrole) or ''
+        return GetAttribute(self.Element, Attribute.Subrole) or ""
 
     @property
     def RoleDescription(self) -> str:
         """Get the localized role description (e.g., 'button', 'text field')."""
-        return GetAttribute(self.Element, Attribute.RoleDescription) or ''
+        return GetAttribute(self.Element, Attribute.RoleDescription) or ""
 
     @property
     def Title(self) -> str:
         """Get the title/label of this element."""
-        return GetAttribute(self.Element, Attribute.Title) or ''
+        return GetAttribute(self.Element, Attribute.Title) or ""
 
     @property
     def Name(self) -> str:
@@ -288,22 +290,22 @@ class Control:
         Get the display name of this element.
         Tries Title, then Description, then Value.
         """
-        return self.Title or self.Description or ''
+        return self.Title or self.Description or ""
 
     @property
     def Label(self) -> str:
         """Get the human-readable label for this element (RoleDescription)."""
-        return self.Title or self.Identifier or self.Description or self.Value or ''
+        return self.Title or self.Identifier or self.Description or self.Value or ""
 
     @property
     def Description(self) -> str:
         """Get the accessibility description of this element."""
-        return GetAttribute(self.Element, Attribute.Description) or ''
+        return GetAttribute(self.Element, Attribute.Description) or ""
 
     @property
     def Help(self) -> str:
         """Get the help text of this element."""
-        return GetAttribute(self.Element, Attribute.Help) or ''
+        return GetAttribute(self.Element, Attribute.Help) or ""
 
     @property
     def Value(self):
@@ -319,12 +321,12 @@ class Control:
     def ValueString(self) -> str:
         """Get the value as a string."""
         val = self.Value
-        return str(val) if val is not None else ''
+        return str(val) if val is not None else ""
 
     @property
     def Identifier(self) -> str:
         """Get the unique identifier (similar to Windows AutomationId)."""
-        return GetAttribute(self.Element, Attribute.Identifier) or ''
+        return GetAttribute(self.Element, Attribute.Identifier) or ""
 
     @property
     def IsEnabled(self) -> bool:
@@ -615,7 +617,7 @@ class Control:
     @property
     def SelectedText(self) -> str:
         """Get the selected text."""
-        return GetAttribute(self.Element, Attribute.SelectedText) or ''
+        return GetAttribute(self.Element, Attribute.SelectedText) or ""
 
     @property
     def SelectedTextRange(self):
@@ -645,40 +647,38 @@ class Control:
     @property
     def Language(self) -> str:
         """Get the language of the element."""
-        return GetAttribute(self.Element, Attribute.Language) or ''
+        return GetAttribute(self.Element, Attribute.Language) or ""
 
     @property
     def PlaceholderValue(self) -> str:
         """Get placeholder text (for text fields)."""
-        return GetAttribute(self.Element, Attribute.PlaceholderValue) or ''
+        return GetAttribute(self.Element, Attribute.PlaceholderValue) or ""
 
-    def GetTextFromMarkers(self, start_marker: Any = None, end_marker: Any = None) -> str:
+    def GetTextFromMarkers(
+        self, start_marker: Any = None, end_marker: Any = None
+    ) -> str:
         """
         Get the text between two text markers.
         If markers are not provided, uses the element's Start and End markers.
         """
         start = start_marker or self.StartTextMarker
         end = end_marker or self.EndTextMarker
-        
+
         if not start or not end:
-            return ''
-            
+            return ""
+
         # 1. Create a range from the two markers
         marker_range = GetParameterizedAttribute(
-            self.Element, 
-            Attribute.TextMarkerRangeForUnorderedTextMarkers, 
-            [start, end]
+            self.Element, Attribute.TextMarkerRangeForUnorderedTextMarkers, [start, end]
         )
         if not marker_range:
-            return ''
-            
+            return ""
+
         # 2. Get the string for that range
         text = GetParameterizedAttribute(
-            self.Element, 
-            Attribute.StringForTextMarkerRange, 
-            marker_range
+            self.Element, Attribute.StringForTextMarkerRange, marker_range
         )
-        return str(text) if text is not None else ''
+        return str(text) if text is not None else ""
 
     # =========================================================================
     # Misc Properties
@@ -688,13 +688,13 @@ class Control:
     def URL(self) -> str:
         """Get the URL (for links and web elements)."""
         val = GetAttribute(self.Element, Attribute.URL)
-        return str(val) if val else ''
+        return str(val) if val else ""
 
     @property
     def Document(self) -> str:
         """Get the document path/URL."""
         val = GetAttribute(self.Element, Attribute.Document)
-        return str(val) if val else ''
+        return str(val) if val else ""
 
     # =========================================================================
     # Attribute Inspection
@@ -775,7 +775,7 @@ class Control:
 
     def FindAll(
         self,
-        role: Optional[Role|str] = None,
+        role: Optional[Role | str] = None,
         subrole: Optional[str] = None,
         title: Optional[str] = None,
         identifier: Optional[str] = None,
@@ -799,14 +799,22 @@ class Control:
         """
         raw_results = []
         _find_recursive_raw(
-            self.Element, raw_results, role, subrole, title,
-            identifier, predicate, max_depth, 0, find_first=False
+            self.Element,
+            raw_results,
+            role,
+            subrole,
+            title,
+            identifier,
+            predicate,
+            max_depth,
+            0,
+            find_first=False,
         )
         return [CreateControl(elem) for elem in raw_results]
 
     def FindFirst(
         self,
-        role: Optional[Role|str] = None,
+        role: Optional[Role | str] = None,
         subrole: Optional[str] = None,
         title: Optional[str] = None,
         identifier: Optional[str] = None,
@@ -819,8 +827,16 @@ class Control:
         """
         raw_results = []
         _find_recursive_raw(
-            self.Element, raw_results, role, subrole, title,
-            identifier, predicate, max_depth, 0, find_first=True
+            self.Element,
+            raw_results,
+            role,
+            subrole,
+            title,
+            identifier,
+            predicate,
+            max_depth,
+            0,
+            find_first=True,
         )
         return CreateControl(raw_results[0]) if raw_results else None
 
@@ -832,7 +848,9 @@ class Control:
     # Mouse Actions
     # =========================================================================
 
-    def Click(self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05) -> None:
+    def Click(
+        self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05
+    ) -> None:
         """
         Click this control at the given ratio position.
 
@@ -845,19 +863,25 @@ class Control:
         if point:
             _Click(point[0], point[1], waitTime)
 
-    def RightClick(self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05) -> None:
+    def RightClick(
+        self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05
+    ) -> None:
         """Right-click this control."""
         point = self._get_click_point(ratioX, ratioY)
         if point:
             _RightClick(point[0], point[1], waitTime)
 
-    def DoubleClick(self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05) -> None:
+    def DoubleClick(
+        self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05
+    ) -> None:
         """Double-click this control."""
         point = self._get_click_point(ratioX, ratioY)
         if point:
             _DoubleClick(point[0], point[1], waitTime)
 
-    def MiddleClick(self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05) -> None:
+    def MiddleClick(
+        self, ratioX: float = 0.5, ratioY: float = 0.5, waitTime: float = 0.05
+    ) -> None:
         """Middle-click this control."""
         point = self._get_click_point(ratioX, ratioY)
         if point:
@@ -911,7 +935,9 @@ class Control:
         if center:
             _MoveTo(center.x, center.y)
 
-    def _get_click_point(self, ratioX: float = 0.5, ratioY: float = 0.5) -> Optional[tuple[float, float]]:
+    def _get_click_point(
+        self, ratioX: float = 0.5, ratioY: float = 0.5
+    ) -> Optional[tuple[float, float]]:
         """Calculate click coordinates from ratio position within bounding rect."""
         rect = self.BoundingRectangle
         if rect:
@@ -939,113 +965,329 @@ class Control:
     # Fluent Chaining Methods
     # =========================================================================
 
-    def ApplicationControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'ApplicationControl':
+    def ApplicationControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "ApplicationControl":
         """Find the first AXApplication child control."""
-        return self.FindFirst(role=Role.Application, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Application,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def WindowControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'WindowControl':
+    def WindowControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "WindowControl":
         """Find the first AXWindow child control."""
-        return self.FindFirst(role=Role.Window, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Window,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def ButtonControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'ButtonControl':
+    def ButtonControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "ButtonControl":
         """Find the first AXButton child control."""
-        return self.FindFirst(role=Role.Button, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Button,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def CheckBoxControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'CheckBoxControl':
+    def CheckBoxControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "CheckBoxControl":
         """Find the first AXCheckBox child control."""
-        return self.FindFirst(role=Role.CheckBox, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.CheckBox,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def RadioButtonControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'RadioButtonControl':
+    def RadioButtonControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "RadioButtonControl":
         """Find the first AXRadioButton child control."""
-        return self.FindFirst(role=Role.RadioButton, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.RadioButton,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def TextFieldControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'TextFieldControl':
+    def TextFieldControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "TextFieldControl":
         """Find the first AXTextField child control."""
-        return self.FindFirst(role=Role.TextField, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.TextField,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def TextAreaControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'TextAreaControl':
+    def TextAreaControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "TextAreaControl":
         """Find the first AXTextArea child control."""
-        return self.FindFirst(role=Role.TextArea, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.TextArea,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def ComboBoxControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'ComboBoxControl':
+    def ComboBoxControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "ComboBoxControl":
         """Find the first AXComboBox child control."""
-        return self.FindFirst(role=Role.ComboBox, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.ComboBox,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def PopUpButtonControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'PopUpButtonControl':
+    def PopUpButtonControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "PopUpButtonControl":
         """Find the first AXPopUpButton child control."""
-        return self.FindFirst(role=Role.PopUpButton, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.PopUpButton,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def SliderControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'SliderControl':
+    def SliderControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "SliderControl":
         """Find the first AXSlider child control."""
-        return self.FindFirst(role=Role.Slider, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Slider,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def MenuItemControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'MenuItemControl':
+    def MenuItemControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "MenuItemControl":
         """Find the first AXMenuItem child control."""
-        return self.FindFirst(role=Role.MenuItem, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.MenuItem,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def MenuBarItemControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'MenuBarItemControl':
+    def MenuBarItemControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "MenuBarItemControl":
         """Find the first AXMenuBarItem child control."""
-        return self.FindFirst(role=Role.MenuBarItem, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.MenuBarItem,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def TabControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'TabControl':
+    def TabControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "TabControl":
         """Find the first AXTab child control (use AXTabGroup for tab groups)."""
-        return self.FindFirst(role=Role.Tab, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Tab,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def ListControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'ListControl':
+    def ListControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "ListControl":
         """Find the first AXList child control."""
-        return self.FindFirst(role=Role.List, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.List,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def TableControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'TableControl':
+    def TableControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "TableControl":
         """Find the first AXTable child control."""
-        return self.FindFirst(role=Role.Table, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Table,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def OutlineControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'OutlineControl':
+    def OutlineControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "OutlineControl":
         """Find the first AXOutline child control."""
-        return self.FindFirst(role=Role.Outline, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Outline,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def ScrollAreaControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'ScrollAreaControl':
+    def ScrollAreaControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "ScrollAreaControl":
         """Find the first AXScrollArea child control."""
-        return self.FindFirst(role=Role.ScrollArea, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.ScrollArea,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def GroupControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'GroupControl':
+    def GroupControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "GroupControl":
         """Find the first AXGroup child control."""
-        return self.FindFirst(role=Role.Group, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Group,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def ImageControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'ImageControl':
+    def ImageControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "ImageControl":
         """Find the first AXImage child control."""
-        return self.FindFirst(role=Role.Image, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Image,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def LinkControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'LinkControl':
+    def LinkControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "LinkControl":
         """Find the first AXLink child control."""
-        return self.FindFirst(role=Role.Link, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Link,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def StaticTextControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'StaticTextControl':
+    def StaticTextControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "StaticTextControl":
         """Find the first AXStaticText child control."""
-        return self.FindFirst(role=Role.StaticText, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.StaticText,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def WebAreaControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'WebAreaControl':
+    def WebAreaControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "WebAreaControl":
         """Find the first AXWebArea child control."""
-        return self.FindFirst(role=Role.WebArea, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.WebArea,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def DisclosureTriangleControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'DisclosureTriangleControl':
+    def DisclosureTriangleControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "DisclosureTriangleControl":
         """Find the first AXDisclosureTriangle child control."""
-        return self.FindFirst(role=Role.DisclosureTriangle, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.DisclosureTriangle,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def RowControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'RowControl':
+    def RowControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "RowControl":
         """Find the first AXRow child control."""
-        return self.FindFirst(role=Role.Row, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Row,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def CellControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'CellControl':
+    def CellControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "CellControl":
         """Find the first AXCell child control."""
-        return self.FindFirst(role=Role.Cell, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.Cell,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def DockItemControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'DockItemControl':
+    def DockItemControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "DockItemControl":
         """Find the first AXDockItem child control."""
-        return self.FindFirst(role=Role.DockItem, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.DockItem,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
-    def ProgressIndicatorControl(self, title=None, identifier=None, predicate=None, max_depth=25) -> 'ProgressIndicatorControl':
+    def ProgressIndicatorControl(
+        self, title=None, identifier=None, predicate=None, max_depth=25
+    ) -> "ProgressIndicatorControl":
         """Find the first AXProgressIndicator child control."""
-        return self.FindFirst(role=Role.ProgressIndicator, title=title, identifier=identifier, predicate=predicate, max_depth=max_depth)
+        return self.FindFirst(
+            role=Role.ProgressIndicator,
+            title=title,
+            identifier=identifier,
+            predicate=predicate,
+            max_depth=max_depth,
+        )
 
     # =========================================================================
     # Representation
@@ -1055,10 +1297,10 @@ class Control:
         role = self.Role
         name = self.Label
         rect = self.BoundingRectangle
-        return f'Control(Role={role}, Name={name!r}, Rect={rect})'
+        return f"Control(Role={role}, Name={name!r}, Rect={rect})"
 
     def __repr__(self) -> str:
-        return f'<{self.__class__.__name__} Role={self.Role!r} Name={self.Label!r}>'
+        return f"<{self.__class__.__name__} Role={self.Role!r} Name={self.Label!r}>"
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Control):
@@ -1072,6 +1314,7 @@ class Control:
 # =============================================================================
 # Typed Control Subclasses
 # =============================================================================
+
 
 class ApplicationControl(Control):
     """
@@ -1094,6 +1337,7 @@ class ApplicationControl(Control):
             pid = GetElementPid(self.Element)
             if pid is not None:
                 from Cocoa import NSWorkspace
+
                 for app in NSWorkspace.sharedWorkspace().runningApplications():
                     if app.processIdentifier() == pid:
                         self._ns_running_app = app
@@ -1161,17 +1405,17 @@ class ApplicationControl(Control):
             'Windowless' — Running but has no windows (closed or never opened).
         """
         if self.IsHidden:
-            return 'Hidden'
+            return "Hidden"
         windows = self.Windows
         if not windows:
-            return 'Windowless'
+            return "Windowless"
         if all(w.IsMinimized for w in windows):
-            return 'Minimized'
+            return "Minimized"
         if self.IsActive:
             if any(w.IsFullScreen for w in windows):
-                return 'Fullscreen'
-            return 'Active'
-        return 'Visible'
+                return "Fullscreen"
+            return "Active"
+        return "Visible"
 
     # =========================================================================
     # AX-based properties (accessibility tree)
@@ -1365,7 +1609,7 @@ class ApplicationControl(Control):
         app = self._get_ns_running_app()
         if app:
             policy = int(app.activationPolicy())
-            return ActivationPolicyNames.get(policy, f'Unknown({policy})')
+            return ActivationPolicyNames.get(policy, f"Unknown({policy})")
         return None
 
     @property
@@ -1407,7 +1651,10 @@ class ApplicationControl(Control):
         app = self._get_ns_running_app()
         if app:
             from Cocoa import NSApplicationActivateIgnoringOtherApps
-            options = NSApplicationActivateIgnoringOtherApps if ignoring_other_apps else 0
+
+            options = (
+                NSApplicationActivateIgnoringOtherApps if ignoring_other_apps else 0
+            )
             return bool(app.activateWithOptions_(options))
         return False
 
@@ -1567,6 +1814,7 @@ class WindowControl(Control):
 
 class ButtonControl(Control):
     """Control for AXButton elements."""
+
     pass
 
 
@@ -1617,11 +1865,12 @@ class TextFieldControl(Control):
 
     def ClearText(self) -> bool:
         """Clear the text in this field."""
-        return self.SetText('')
+        return self.SetText("")
 
 
 class TextAreaControl(TextFieldControl):
     """Control for AXTextArea elements (multi-line text)."""
+
     pass
 
 
@@ -1681,7 +1930,7 @@ class MenuItemControl(Control):
     @property
     def MenuItemCmdChar(self) -> str:
         """Get the command character shortcut."""
-        return GetAttribute(self.Element, Attribute.MenuItemCmdChar) or ''
+        return GetAttribute(self.Element, Attribute.MenuItemCmdChar) or ""
 
     def Select(self) -> bool:
         """Select this menu item."""
@@ -1791,6 +2040,7 @@ class ScrollAreaControl(Control):
 
 class GroupControl(Control):
     """Control for AXGroup elements."""
+
     pass
 
 
@@ -1801,7 +2051,7 @@ class ImageControl(Control):
     def URL(self) -> str:
         """Get the image URL if available."""
         val = GetAttribute(self.Element, Attribute.URL)
-        return str(val) if val else ''
+        return str(val) if val else ""
 
 
 class LinkControl(Control):
@@ -1811,7 +2061,7 @@ class LinkControl(Control):
     def URL(self) -> str:
         """Get the link URL."""
         val = GetAttribute(self.Element, Attribute.URL)
-        return str(val) if val else ''
+        return str(val) if val else ""
 
 
 class ProgressIndicatorControl(Control):
@@ -1843,13 +2093,13 @@ class WebAreaControl(Control):
     def URL(self) -> str:
         """Get the web page URL."""
         val = GetAttribute(self.Element, Attribute.URL)
-        return str(val) if val else ''
+        return str(val) if val else ""
 
     @property
     def Document(self) -> str:
         """Get the document URL."""
         val = GetAttribute(self.Element, Attribute.Document)
-        return str(val) if val else ''
+        return str(val) if val else ""
 
 
 class DisclosureTriangleControl(Control):
@@ -1868,6 +2118,7 @@ class DisclosureTriangleControl(Control):
 
 class DockItemControl(Control):
     """Control for AXDockItem elements."""
+
     pass
 
 
@@ -1960,6 +2211,7 @@ def CreateControl(element) -> Control:
 # Module-level Search Helper
 # =============================================================================
 
+
 def _find_recursive_raw(
     element: Any,
     results: list[Any],
@@ -1988,10 +2240,14 @@ def _find_recursive_raw(
             return
 
         # Read attributes for matching (lightweight; only wrap if predicate needed)
-        child_role = GetAttribute(child, Attribute.Role) or ''
-        child_subrole = GetAttribute(child, Attribute.Subrole) or '' if subrole else None
-        child_title = GetAttribute(child, Attribute.Title) or '' if title else None
-        child_identifier = GetAttribute(child, Attribute.Identifier) or '' if identifier else None
+        child_role = GetAttribute(child, Attribute.Role) or ""
+        child_subrole = (
+            GetAttribute(child, Attribute.Subrole) or "" if subrole else None
+        )
+        child_title = GetAttribute(child, Attribute.Title) or "" if title else None
+        child_identifier = (
+            GetAttribute(child, Attribute.Identifier) or "" if identifier else None
+        )
 
         # Apply filters
         match = True
@@ -2015,6 +2271,14 @@ def _find_recursive_raw(
 
         # Recurse into children
         _find_recursive_raw(
-            child, results, role, subrole, title,
-            identifier, predicate, max_depth, current_depth + 1, find_first
+            child,
+            results,
+            role,
+            subrole,
+            title,
+            identifier,
+            predicate,
+            max_depth,
+            current_depth + 1,
+            find_first,
         )

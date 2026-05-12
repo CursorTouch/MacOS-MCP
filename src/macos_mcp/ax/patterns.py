@@ -9,7 +9,7 @@ that provide a consistent interaction API.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from .core import (
     GetAttribute,
@@ -50,6 +50,7 @@ class InvokePattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the Invoke pattern."""
         from .core import GetActionNames
+
         actions = GetActionNames(element)
         return Action.Press in actions
 
@@ -88,6 +89,7 @@ class ValuePattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the Value pattern."""
         from .core import GetAttributeNames
+
         return Attribute.Value in GetAttributeNames(element)
 
 
@@ -146,6 +148,7 @@ class RangeValuePattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the RangeValue pattern."""
         from .core import GetActionNames
+
         actions = GetActionNames(element)
         return Action.Increment in actions or Action.Decrement in actions
 
@@ -189,8 +192,9 @@ class TogglePattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the Toggle pattern."""
         from .core import GetAttribute as _GetAttr
+
         role = _GetAttr(element, Attribute.Role)
-        return role in ('AXCheckBox', 'AXToggle', 'AXSwitch')
+        return role in ("AXCheckBox", "AXToggle", "AXSwitch")
 
 
 class ExpandCollapsePattern:
@@ -230,6 +234,7 @@ class ExpandCollapsePattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the ExpandCollapse pattern."""
         from .core import GetAttributeNames
+
         attrs = GetAttributeNames(element)
         return Attribute.Expanded in attrs
 
@@ -289,10 +294,10 @@ class ScrollPattern:
             direction: 'up', 'down', 'left', or 'right'.
         """
         action_map = {
-            'up': Action.ScrollUpByPage,
-            'down': Action.ScrollDownByPage,
-            'left': Action.ScrollLeftByPage,
-            'right': Action.ScrollRightByPage,
+            "up": Action.ScrollUpByPage,
+            "down": Action.ScrollDownByPage,
+            "left": Action.ScrollLeftByPage,
+            "right": Action.ScrollRightByPage,
         }
         action = action_map.get(direction.lower())
         if action:
@@ -328,6 +333,7 @@ class SelectionPattern:
     def SelectedChildControls(self) -> list["Control"]:
         """Get the currently selected children as Control objects."""
         from .controls import Control
+
         children = GetAttribute(self._element, Attribute.SelectedChildren)
         if children:
             return [Control(element=c) for c in children]
@@ -337,6 +343,7 @@ class SelectionPattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the Selection pattern."""
         from .core import GetAttributeNames
+
         return Attribute.SelectedChildren in GetAttributeNames(element)
 
 
@@ -392,8 +399,9 @@ class WindowPattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the Window pattern."""
         from .core import GetAttribute as _GetAttr
+
         role = _GetAttr(element, Attribute.Role)
-        return role == 'AXWindow'
+        return role == "AXWindow"
 
 
 class TextPattern:
@@ -411,12 +419,12 @@ class TextPattern:
     def Text(self) -> str:
         """Get the full text content."""
         val = GetAttribute(self._element, Attribute.Value)
-        return str(val) if val is not None else ''
+        return str(val) if val is not None else ""
 
     @property
     def SelectedText(self) -> str:
         """Get the currently selected text."""
-        return GetAttribute(self._element, Attribute.SelectedText) or ''
+        return GetAttribute(self._element, Attribute.SelectedText) or ""
 
     @property
     def SelectedTextRange(self):
@@ -444,6 +452,7 @@ class TextPattern:
     def IsSupported(element: Any) -> bool:
         """Check if the element supports the Text pattern."""
         from .core import GetAttributeNames
+
         attrs = GetAttributeNames(element)
         return Attribute.NumberOfCharacters in attrs or Attribute.SelectedText in attrs
 
@@ -451,6 +460,7 @@ class TextPattern:
 # =============================================================================
 # Pattern Factory
 # =============================================================================
+
 
 def GetPattern(element, pattern_class):
     """

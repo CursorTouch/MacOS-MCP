@@ -1,6 +1,7 @@
 """
 macOS permission checker for Accessibility and Screen Recording.
 """
+
 import subprocess
 import logging
 import sys
@@ -18,6 +19,7 @@ def check_accessibility_permission() -> bool:
     """
     try:
         from ApplicationServices import AXIsProcessTrusted
+
         return AXIsProcessTrusted()
     except Exception as e:
         logger.error(f"Failed to check Accessibility permission: {e}")
@@ -33,10 +35,10 @@ def check_screen_recording_permission() -> bool:
     """
     try:
         result = subprocess.run(
-            ["osascript", "-e", "tell application \"System Events\" to get version"],
+            ["osascript", "-e", 'tell application "System Events" to get version'],
             capture_output=True,
             timeout=2,
-            text=True
+            text=True,
         )
         return result.returncode == 0
     except Exception as e:
@@ -68,8 +70,11 @@ def request_permissions() -> Tuple[bool, bool]:
 
         # Open System Preferences to Privacy & Security
         subprocess.run(
-            ["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
-            timeout=5
+            [
+                "open",
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+            ],
+            timeout=5,
         )
 
     return accessibility_ok, screen_recording_ok

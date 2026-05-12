@@ -1,9 +1,20 @@
-from macos_mcp.tree.config import INTERACTIVE_ACTIONS, INTERACTIVE_ROLES, CONTAINER_ROLES, SCROLLABLE_ROLES, WINDOW_CONTROL_SUBROLES, PRUNABLE_ROLES
-from macos_mcp.tree.views import TreeState, TreeElementNode, ScrollElementNode, TextElementNode, BoundingBox, Center
+from macos_mcp.tree.config import (
+    INTERACTIVE_ROLES,
+    SCROLLABLE_ROLES,
+    WINDOW_CONTROL_SUBROLES,
+    PRUNABLE_ROLES,
+)
+from macos_mcp.tree.views import (
+    TreeState,
+    TreeElementNode,
+    ScrollElementNode,
+    TextElementNode,
+    BoundingBox,
+)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import deque
 from macos_mcp.desktop.config import BROWSER_BUNDLE_IDS, SYSTEM_UI_BUNDLE_IDS
-from macos_mcp.desktop.views import Status, Window
+from macos_mcp.desktop.views import Window
 import macos_mcp.ax as ax
 import logging
 
@@ -30,15 +41,14 @@ class Tree:
                 system_bundle_ids.append(app.BundleIdentifier)
                 bundle_ids.append(app.BundleIdentifier)
         if active_window:
-            if app:=ax.GetRunningApplicationByBundleId(active_window.bundle_id):
+            if app := ax.GetRunningApplicationByBundleId(active_window.bundle_id):
                 ax.SetAttribute(app.Element, "AXEnhancedUserInterface", True)
 
             bundle_ids.append(active_window.bundle_id)
 
         interactive_nodes, scrollable_nodes, dom_informative_nodes = (
             self.get_window_wise_nodes(
-                bundle_ids=bundle_ids,
-                system_bundle_ids=system_bundle_ids
+                bundle_ids=bundle_ids, system_bundle_ids=system_bundle_ids
             )
         )
 
@@ -49,8 +59,9 @@ class Tree:
             dom_informative_nodes=dom_informative_nodes,
         )
 
-    def get_window_wise_nodes(self, bundle_ids: list[str],
-        system_bundle_ids: list[str] | None = None) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
+    def get_window_wise_nodes(
+        self, bundle_ids: list[str], system_bundle_ids: list[str] | None = None
+    ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
@@ -102,11 +113,13 @@ class Tree:
                                 bundle_id,
                                 THREAD_MAX_RETRIES,
                                 e,
-                                exc_info=True
+                                exc_info=True,
                             )
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
-    def get_nodes(self, bundle_id: str, is_browser: bool) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
+    def get_nodes(
+        self, bundle_id: str, is_browser: bool
+    ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         """
         Get interactive and scrollable nodes for an app by bundle_id.
         Tree traversal begins here: starts from each window and recurses via tree_traversal.
@@ -118,31 +131,64 @@ class Tree:
         app = ax.GetRunningApplicationByBundleId(bundle_id)
         if not app:
             return [], [], []
-        
+
         # Optimization: Set a short timeout for AX messaging to prevent hanging on slow/unresponsive apps
         # Default is usually around 6 seconds; 0.5s is plenty for most well-behaved apps.
         ax.SetMessagingTimeout(app.Element, 0.5)
-        
+
         app_name = app.Name or bundle_id
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
 
-        if menubar:=app.MenuBar:
-            self.tree_traversal(menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser=is_browser)
-        if extras_menubar:=app.ExtrasMenuBar:
-            self.tree_traversal(extras_menubar, app_name, interactive_nodes, scrollable_nodes, [], is_browser=is_browser)
+        if menubar := app.MenuBar:
+            self.tree_traversal(
+                menubar,
+                app_name,
+                interactive_nodes,
+                scrollable_nodes,
+                [],
+                is_browser=is_browser,
+            )
+        if extras_menubar := app.ExtrasMenuBar:
+            self.tree_traversal(
+                extras_menubar,
+                app_name,
+                interactive_nodes,
+                scrollable_nodes,
+                [],
+                is_browser=is_browser,
+            )
         if main_window := app.MainWindow:
-            if main_window_rect:=main_window.BoundingRectangle:
-                main_window_bounding_box=BoundingBox.from_bounding_rectangle(main_window_rect)
-                self.tree_traversal(main_window, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, main_window_bounding_box=main_window_bounding_box, is_browser=is_browser)
+            if main_window_rect := main_window.BoundingRectangle:
+                main_window_bounding_box = BoundingBox.from_bounding_rectangle(
+                    main_window_rect
+                )
+                self.tree_traversal(
+                    main_window,
+                    app_name,
+                    interactive_nodes,
+                    scrollable_nodes,
+                    dom_informative_nodes,
+                    main_window_bounding_box=main_window_bounding_box,
+                    is_browser=is_browser,
+                )
         else:
             # Fallback for apps like Dock: content is under app root (e.g. AXList child)
             for child in app.GetChildren():
-                self.tree_traversal(child, app_name, interactive_nodes, scrollable_nodes, dom_informative_nodes, is_browser=is_browser)
+                self.tree_traversal(
+                    child,
+                    app_name,
+                    interactive_nodes,
+                    scrollable_nodes,
+                    dom_informative_nodes,
+                    is_browser=is_browser,
+                )
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
-    def iou_bounding_box(self, window_box: BoundingBox, element_box: BoundingBox) -> BoundingBox:
+    def iou_bounding_box(
+        self, window_box: BoundingBox, element_box: BoundingBox
+    ) -> BoundingBox:
         left = max(window_box.left, element_box.left)
         top = max(window_box.top, element_box.top)
         right = min(window_box.right, element_box.right)
@@ -155,56 +201,73 @@ class Tree:
                 right=right,
                 bottom=bottom,
                 width=right - left,
-                height=bottom - top
+                height=bottom - top,
             )
         return BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
 
-    def _dom_correction(self, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str, main_window_bounding_box: BoundingBox | None = None):
-        if attrs['role'] == "AXLink":
-            children = attrs.get('children', [])
+    def _dom_correction(
+        self,
+        attrs: dict,
+        interactive_nodes: list[TreeElementNode],
+        window_name: str,
+        main_window_bounding_box: BoundingBox | None = None,
+    ):
+        if attrs["role"] == "AXLink":
+            children = attrs.get("children", [])
             if children:
                 first_child_element = children[0]
                 # Single batch call: check role and get display attrs in one IPC round-trip.
                 child_attrs = ax.GetTraversalBatch(first_child_element)
-                if child_attrs['role'] == "AXHeading":
+                if child_attrs["role"] == "AXHeading":
                     interactive_nodes.pop()
-                    if child_attrs['rect']:
-                        bounding_box = BoundingBox.from_bounding_rectangle(child_attrs['rect'])
+                    if child_attrs["rect"]:
+                        bounding_box = BoundingBox.from_bounding_rectangle(
+                            child_attrs["rect"]
+                        )
                         if main_window_bounding_box:
-                            bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
+                            bounding_box = self.iou_bounding_box(
+                                main_window_bounding_box, bounding_box
+                            )
                         center = bounding_box.get_center()
                         metadata = {}
-                        if child_attrs['identifier']:
-                            metadata['axidentifier'] = child_attrs['identifier']
-                        interactive_nodes.append(TreeElementNode(
-                            bounding_box=bounding_box,
-                            center=center,
-                            name=child_attrs['label'] or "",
-                            control_type=child_attrs['role'] or "",
-                            window_name=window_name,
-                            metadata=metadata,
-                        ))
+                        if child_attrs["identifier"]:
+                            metadata["axidentifier"] = child_attrs["identifier"]
+                        interactive_nodes.append(
+                            TreeElementNode(
+                                bounding_box=bounding_box,
+                                center=center,
+                                name=child_attrs["label"] or "",
+                                control_type=child_attrs["role"] or "",
+                                window_name=window_name,
+                                metadata=metadata,
+                            )
+                        )
 
-    def _desktop_correction(self, attrs: dict, interactive_nodes: list[TreeElementNode], window_name: str, main_window_bounding_box: BoundingBox | None = None):
-        role = attrs['role']
-        rect = attrs['rect']
+    def _desktop_correction(
+        self,
+        attrs: dict,
+        interactive_nodes: list[TreeElementNode],
+        window_name: str,
+        main_window_bounding_box: BoundingBox | None = None,
+    ):
+        role = attrs["role"]
+        rect = attrs["rect"]
         if role in ["AXCell", "AXGroup"]:
-            children = attrs.get('children', [])
+            children = attrs.get("children", [])
             current_element = children[0] if children else None
             found_static_text_value = None
-            
+
             while current_element:
                 # Optimization: Single IPC call for Role, Value, and Children to continue traversal
-                batch = ax.GetMultipleAttributeValues(current_element, [
-                    ax.Attribute.Role, 
-                    ax.Attribute.Value, 
-                    ax.Attribute.Children
-                ])
-                
+                batch = ax.GetMultipleAttributeValues(
+                    current_element,
+                    [ax.Attribute.Role, ax.Attribute.Value, ax.Attribute.Children],
+                )
+
                 if batch.get(ax.Attribute.Role) == "AXStaticText":
                     found_static_text_value = batch.get(ax.Attribute.Value) or ""
                     break
-                
+
                 next_children = batch.get(ax.Attribute.Children)
                 current_element = next_children[0] if next_children else None
 
@@ -213,38 +276,51 @@ class Tree:
                 metadata = node.metadata
                 bounding_box = BoundingBox.from_bounding_rectangle(rect)
                 if main_window_bounding_box:
-                    bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
+                    bounding_box = self.iou_bounding_box(
+                        main_window_bounding_box, bounding_box
+                    )
                 center = bounding_box.get_center()
-                interactive_nodes.append(TreeElementNode(
-                    bounding_box=bounding_box,
-                    center=center,
-                    name=found_static_text_value,
-                    control_type=role,
-                    window_name=window_name,
-                    metadata=metadata,
-                ))
+                interactive_nodes.append(
+                    TreeElementNode(
+                        bounding_box=bounding_box,
+                        center=center,
+                        name=found_static_text_value,
+                        control_type=role,
+                        window_name=window_name,
+                        metadata=metadata,
+                    )
+                )
         elif role == "AXButton":
-            subrole = attrs['subrole']
+            subrole = attrs["subrole"]
             if subrole in WINDOW_CONTROL_SUBROLES:
-                node=interactive_nodes.pop()
-                metadata=node.metadata
+                node = interactive_nodes.pop()
+                metadata = node.metadata
                 element_bounding_box = BoundingBox.from_bounding_rectangle(rect)
                 if main_window_bounding_box:
-                    element_bounding_box = self.iou_bounding_box(main_window_bounding_box, element_bounding_box)
+                    element_bounding_box = self.iou_bounding_box(
+                        main_window_bounding_box, element_bounding_box
+                    )
                 center = element_bounding_box.get_center()
-                interactive_nodes.append(TreeElementNode(
-                    bounding_box=element_bounding_box,
-                    center=center,
-                    name=WINDOW_CONTROL_SUBROLES[subrole] or "",
-                    control_type=role,
-                    window_name=window_name,
-                    metadata=metadata,
-                ))
+                interactive_nodes.append(
+                    TreeElementNode(
+                        bounding_box=element_bounding_box,
+                        center=center,
+                        name=WINDOW_CONTROL_SUBROLES[subrole] or "",
+                        control_type=role,
+                        window_name=window_name,
+                        metadata=metadata,
+                    )
+                )
 
     def tree_traversal(
-        self, root_control: ax.Control, window_name: str,
-        interactive_nodes: list[TreeElementNode], scrollable_nodes: list[ScrollElementNode], dom_informative_nodes: list[TextElementNode],
-        main_window_bounding_box: BoundingBox | None = None, is_browser: bool = False
+        self,
+        root_control: ax.Control,
+        window_name: str,
+        interactive_nodes: list[TreeElementNode],
+        scrollable_nodes: list[ScrollElementNode],
+        dom_informative_nodes: list[TextElementNode],
+        main_window_bounding_box: BoundingBox | None = None,
+        is_browser: bool = False,
     ) -> None:
         """
         Traverse the accessibility tree iteratively and collect interactive and scrollable nodes.
@@ -262,11 +338,11 @@ class Tree:
             # --- Phase 1: minimal batch for all elements ---
             early = ax.GetEarlyTraversalBatch(element)
 
-            role = early['role']
-            rect = early['rect']
-            children = early['children']
+            role = early["role"]
+            rect = early["rect"]
+            children = early["children"]
 
-            if early['hidden'] or role in PRUNABLE_ROLES:
+            if early["hidden"] or role in PRUNABLE_ROLES:
                 continue
 
             if rect is None:
@@ -274,14 +350,21 @@ class Tree:
                     stack.append((child_element, current_is_browser))
                 continue
 
-            is_visible = (rect.width > 1 and rect.height > 1)
+            is_visible = rect.width > 1 and rect.height > 1
             has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
-            has_title_ui_element = bool(early['title_ui_element'])
-            is_interactive = ((has_roles and early['enabled']) or bool(early['help']) or early['has_popup'] or has_title_ui_element) and is_visible
+            has_title_ui_element = bool(early["title_ui_element"])
+            is_interactive = (
+                (has_roles and early["enabled"])
+                or bool(early["help"])
+                or early["has_popup"]
+                or has_title_ui_element
+            ) and is_visible
 
             bounding_box = BoundingBox.from_bounding_rectangle(rect)
             if main_window_bounding_box:
-                bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
+                bounding_box = self.iou_bounding_box(
+                    main_window_bounding_box, bounding_box
+                )
                 if bounding_box.width == 0 or bounding_box.height == 0:
                     continue
 
@@ -291,10 +374,14 @@ class Tree:
 
                 # Resolve TitleUIElement ref (fetched in phase 1) to its display text.
                 title_ui_element_text = None
-                if early['title_ui_element'] is not None:
+                if early["title_ui_element"] is not None:
                     ref_raw = ax.GetMultipleAttributeValues(
-                        early['title_ui_element'],
-                        [ax.Attribute.Title, ax.Attribute.Value, ax.Attribute.Description],
+                        early["title_ui_element"],
+                        [
+                            ax.Attribute.Title,
+                            ax.Attribute.Value,
+                            ax.Attribute.Description,
+                        ],
                     )
                     title_ui_element_text = (
                         ref_raw.get(ax.Attribute.Title)
@@ -303,42 +390,44 @@ class Tree:
                         or None
                     )
 
-                label = late['label'] or (str(title_ui_element_text) if title_ui_element_text else '')
-                attrs = {**early, **late, 'title_ui_element': title_ui_element_text}
+                label = late["label"] or (
+                    str(title_ui_element_text) if title_ui_element_text else ""
+                )
+                attrs = {**early, **late, "title_ui_element": title_ui_element_text}
 
                 center = bounding_box.get_center()
                 metadata = {}
 
                 if role == "AXTextField":
-                    if placeholder := late['placeholder']:
-                        metadata['placeholder'] = placeholder
-                    if value := late['value']:
-                        metadata['value'] = value
+                    if placeholder := late["placeholder"]:
+                        metadata["placeholder"] = placeholder
+                    if value := late["value"]:
+                        metadata["value"] = value
 
                 elif role == "AXComboBox" or role == "AXTextArea":
-                    if placeholder := late['placeholder']:
-                        metadata['placeholder'] = placeholder
-                    if value := late['value']:
-                        metadata['value'] = value
-                    if late['expanded']:
-                        metadata['expanded'] = late['expanded']
-                    if early['has_popup']:
-                        metadata['has_popup'] = early['has_popup']
+                    if placeholder := late["placeholder"]:
+                        metadata["placeholder"] = placeholder
+                    if value := late["value"]:
+                        metadata["value"] = value
+                    if late["expanded"]:
+                        metadata["expanded"] = late["expanded"]
+                    if early["has_popup"]:
+                        metadata["has_popup"] = early["has_popup"]
 
                 elif role == "AXRadioButton":
-                    if value := late['value']:
-                        metadata['selected'] = value
+                    if value := late["value"]:
+                        metadata["selected"] = value
 
                 elif role == "AXPopUpButton":
                     if title_ui_element_text:
-                        metadata['title'] = title_ui_element_text
+                        metadata["title"] = title_ui_element_text
 
                 elif role == "AXLink":
-                    if url := late['url']:
-                        metadata['url'] = url
+                    if url := late["url"]:
+                        metadata["url"] = url
 
-                if late.get('identifier'):
-                    metadata['axidentifier'] = late['identifier']
+                if late.get("identifier"):
+                    metadata["axidentifier"] = late["identifier"]
 
                 interactive_nodes.append(
                     TreeElementNode(
@@ -351,23 +440,29 @@ class Tree:
                     )
                 )
                 if current_is_browser:
-                    self._dom_correction(attrs, interactive_nodes, window_name, main_window_bounding_box)
+                    self._dom_correction(
+                        attrs, interactive_nodes, window_name, main_window_bounding_box
+                    )
                 else:
-                    self._desktop_correction(attrs, interactive_nodes, window_name, main_window_bounding_box)
+                    self._desktop_correction(
+                        attrs, interactive_nodes, window_name, main_window_bounding_box
+                    )
 
             if role in SCROLLABLE_ROLES and is_visible:
                 first_child = children[0] if children else None
-                scroll_label = ''
+                scroll_label = ""
                 if first_child is not None:
                     child_late = ax.GetLateTraversalBatch(first_child)
-                    scroll_label = child_late['label']
-                scrollable_nodes.append(ScrollElementNode(
-                    name=scroll_label,
-                    control_type=role,
-                    window_name=window_name,
-                    bounding_box=bounding_box,
-                    center=bounding_box.get_center(),
-                ))
+                    scroll_label = child_late["label"]
+                scrollable_nodes.append(
+                    ScrollElementNode(
+                        name=scroll_label,
+                        control_type=role,
+                        window_name=window_name,
+                        bounding_box=bounding_box,
+                        center=bounding_box.get_center(),
+                    )
+                )
 
             for child_element in reversed(children):
                 stack.append((child_element, current_is_browser))

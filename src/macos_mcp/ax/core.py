@@ -32,15 +32,11 @@ from Quartz import (
     kCGEventRightMouseUp,
     kCGEventOtherMouseDown,
     kCGEventOtherMouseUp,
-    kCGScrollEventUnitPixel,
     kCGScrollEventUnitLine,
     kCGMouseButtonLeft,
     kCGMouseButtonRight,
     kCGMouseButtonCenter,
-    kCGEventFlagMaskCommand,
     kCGEventFlagMaskShift,
-    kCGEventFlagMaskAlternate,
-    kCGEventFlagMaskControl,
     CGMainDisplayID,
     CGDisplayPixelsWide,
     CGDisplayPixelsHigh,
@@ -94,7 +90,6 @@ if TYPE_CHECKING:
     from macos_mcp.ax.controls import ApplicationControl, Control, WindowControl
 
 from .enums import (
-    AXError,
     AXValueType,
     Attribute,
     KeyCode,
@@ -112,12 +107,14 @@ _messaging_timeouts: dict[Any, float] = {}
 # Geometry Data Classes
 # =============================================================================
 
+
 @dataclass
 class Rect:
     """
     Rectangle representing a UI element's bounds.
     Equivalent to Windows UIA RECT.
     """
+
     left: float
     top: float
     right: float
@@ -139,18 +136,18 @@ class Rect:
         )
 
     @classmethod
-    def from_position_size(cls, x: float, y: float, w: float, h: float) -> 'Rect':
+    def from_position_size(cls, x: float, y: float, w: float, h: float) -> "Rect":
         return cls(left=x, top=y, right=x + w, bottom=y + h)
 
-    def intersects(self, other: 'Rect') -> bool:
+    def intersects(self, other: "Rect") -> bool:
         return not (
-            self.right < other.left or
-            self.left > other.right or
-            self.bottom < other.top or
-            self.top > other.bottom
+            self.right < other.left
+            or self.left > other.right
+            or self.bottom < other.top
+            or self.top > other.bottom
         )
 
-    def intersection(self, other: 'Rect') -> Optional['Rect']:
+    def intersection(self, other: "Rect") -> Optional["Rect"]:
         new_left = max(self.left, other.left)
         new_top = max(self.top, other.top)
         new_right = min(self.right, other.right)
@@ -160,42 +157,46 @@ class Rect:
         return None
 
     def __str__(self) -> str:
-        return f'Rect(left={int(self.left)}, top={int(self.top)}, right={int(self.right)}, bottom={int(self.bottom)})'
+        return f"Rect(left={int(self.left)}, top={int(self.top)}, right={int(self.right)}, bottom={int(self.bottom)})"
 
 
 @dataclass
 class Point:
     """A 2D point in screen coordinates."""
+
     x: float
     y: float
 
     def __str__(self) -> str:
-        return f'({int(self.x)}, {int(self.y)})'
+        return f"({int(self.x)}, {int(self.y)})"
 
 
 @dataclass
 class Size:
     """A 2D size."""
+
     width: float
     height: float
 
     def __str__(self) -> str:
-        return f'({int(self.width)}, {int(self.height)})'
+        return f"({int(self.width)}, {int(self.height)})"
 
 
 # =============================================================================
 # AX Client Singleton
 # =============================================================================
 
+
 class _AXClient:
     """
     Singleton providing access to the macOS Accessibility API.
     Equivalent to Windows UIA _AutomationClient.
     """
-    _instance: Optional['_AXClient'] = None
+
+    _instance: Optional["_AXClient"] = None
 
     @classmethod
-    def instance(cls) -> '_AXClient':
+    def instance(cls) -> "_AXClient":
         """Get or create the singleton AX client instance."""
         if cls._instance is None:
             cls._instance = cls()
@@ -224,6 +225,7 @@ class _AXClient:
 # =============================================================================
 # Element Creation Functions
 # =============================================================================
+
 
 def GetRootControl() -> Any:
     """
@@ -254,9 +256,10 @@ def IsAccessibilityEnabledWithPrompt() -> bool:
 
     Returns True if the process is trusted.
     """
-    from CoreFoundation import CFDictionaryCreate, kCFBooleanTrue
+    from CoreFoundation import kCFBooleanTrue
+
     options = {
-        'AXTrustedCheckOptionPrompt': kCFBooleanTrue,
+        "AXTrustedCheckOptionPrompt": kCFBooleanTrue,
     }
     return AXIsProcessTrustedWithOptions(options)
 
@@ -264,6 +267,7 @@ def IsAccessibilityEnabledWithPrompt() -> bool:
 # =============================================================================
 # Attribute Access Helpers
 # =============================================================================
+
 
 def GetAttribute(element: Any, attribute: str) -> Optional[Any]:
     """
@@ -279,13 +283,17 @@ def GetAttribute(element: Any, attribute: str) -> Optional[Any]:
     return None
 
 
-def GetParameterizedAttribute(element: Any, attribute: str, parameter: Any) -> Optional[Any]:
+def GetParameterizedAttribute(
+    element: Any, attribute: str, parameter: Any
+) -> Optional[Any]:
     """
     Get a parameterized attribute value from an AXUIElement.
     Returns None if the attribute is not available or an error occurs.
     """
     try:
-        error, value = AXUIElementCopyParameterizedAttributeValue(element, attribute, parameter, None)
+        error, value = AXUIElementCopyParameterizedAttributeValue(
+            element, attribute, parameter, None
+        )
         if error == kAXErrorSuccess:
             return value
     except Exception:
@@ -302,10 +310,16 @@ def SetAttribute(element: Any, attribute: str, value: Any) -> bool:
         wrapped_value = value
         if attribute == Attribute.Position and isinstance(value, (tuple, list)):
             from Quartz import CGPointMake
-            wrapped_value = AXValueCreate(AXValueType.CGPoint, CGPointMake(float(value[0]), float(value[1])))
+
+            wrapped_value = AXValueCreate(
+                AXValueType.CGPoint, CGPointMake(float(value[0]), float(value[1]))
+            )
         elif attribute == Attribute.Size and isinstance(value, (tuple, list)):
             from Quartz import CGSizeMake
-            wrapped_value = AXValueCreate(AXValueType.CGSize, CGSizeMake(float(value[0]), float(value[1])))
+
+            wrapped_value = AXValueCreate(
+                AXValueType.CGSize, CGSizeMake(float(value[0]), float(value[1]))
+            )
 
         error = AXUIElementSetAttributeValue(element, attribute, wrapped_value)
         return error == kAXErrorSuccess
@@ -362,7 +376,9 @@ def PerformAction(element: Any, action: str) -> bool:
 def GetChildCount(element: Any) -> int:
     """Get the number of children of an element."""
     try:
-        error, count = AXUIElementGetAttributeValueCount(element, Attribute.Children, None)
+        error, count = AXUIElementGetAttributeValueCount(
+            element, Attribute.Children, None
+        )
         if error == kAXErrorSuccess:
             return count
     except Exception:
@@ -373,10 +389,14 @@ def GetChildCount(element: Any) -> int:
 def GetChildren(element: Any) -> list[Any]:
     """Get child elements of an accessibility element."""
     try:
-        error, count = AXUIElementGetAttributeValueCount(element, Attribute.Children, None)
+        error, count = AXUIElementGetAttributeValueCount(
+            element, Attribute.Children, None
+        )
         if error != kAXErrorSuccess or count == 0:
             return []
-        error, children = AXUIElementCopyAttributeValue(element, Attribute.Children, None)
+        error, children = AXUIElementCopyAttributeValue(
+            element, Attribute.Children, None
+        )
         if error == kAXErrorSuccess and children:
             return list(children)
     except Exception:
@@ -388,20 +408,23 @@ def _parse_ax_position(pos_val) -> Optional[Tuple[float, float]]:
     """Parse a position from a raw AXValue that has already been fetched."""
     if pos_val is None:
         return None
-    if hasattr(pos_val, 'x') and hasattr(pos_val, 'y'):
+    if hasattr(pos_val, "x") and hasattr(pos_val, "y"):
         return (pos_val.x, pos_val.y)
     try:
         from ApplicationServices import AXValueGetValue
+
         success, point = AXValueGetValue(pos_val, AXValueType.CGPoint, None)
         if success and point is not None:
-            if hasattr(point, 'x') and hasattr(point, 'y'):
+            if hasattr(point, "x") and hasattr(point, "y"):
                 return (point.x, point.y)
     except Exception:
         pass
-    if hasattr(pos_val, 'getValue_size_type_') or str(pos_val).startswith('<AXValue'):
+    if hasattr(pos_val, "getValue_size_type_") or str(pos_val).startswith("<AXValue"):
         desc = str(pos_val)
         try:
-            match = re.search(r'x[:=]\s*([-\d\.]+).*?y[:=]\s*([-\d\.]+)', desc, re.IGNORECASE)
+            match = re.search(
+                r"x[:=]\s*([-\d\.]+).*?y[:=]\s*([-\d\.]+)", desc, re.IGNORECASE
+            )
             if match:
                 return (float(match.group(1)), float(match.group(2)))
         except Exception:
@@ -418,13 +441,14 @@ def _parse_ax_size(size_val) -> Optional[Tuple[float, float]]:
     """Parse a size from a raw AXValue that has already been fetched."""
     if size_val is None:
         return None
-    if hasattr(size_val, 'width') and hasattr(size_val, 'height'):
+    if hasattr(size_val, "width") and hasattr(size_val, "height"):
         return (size_val.width, size_val.height)
     try:
         from ApplicationServices import AXValueGetValue
+
         success, size = AXValueGetValue(size_val, AXValueType.CGSize, None)
         if success and size is not None:
-            if hasattr(size, 'width') and hasattr(size, 'height'):
+            if hasattr(size, "width") and hasattr(size, "height"):
                 return (size.width, size.height)
     except Exception:
         pass
@@ -433,10 +457,14 @@ def _parse_ax_size(size_val) -> Optional[Tuple[float, float]]:
             return (size_val[0], size_val[1])
     except Exception:
         pass
-    if hasattr(size_val, 'getValue_size_type_') or str(size_val).startswith('<AXValue'):
+    if hasattr(size_val, "getValue_size_type_") or str(size_val).startswith("<AXValue"):
         desc = str(size_val)
         try:
-            match = re.search(r'w(idth)?[:=]\s*([-\d\.]+).*?h(eight)?[:=]\s*([-\d\.]+)', desc, re.IGNORECASE)
+            match = re.search(
+                r"w(idth)?[:=]\s*([-\d\.]+).*?h(eight)?[:=]\s*([-\d\.]+)",
+                desc,
+                re.IGNORECASE,
+            )
             if match:
                 return (float(match.group(2)), float(match.group(4)))
         except Exception:
@@ -509,16 +537,20 @@ def GetEarlyTraversalBatch(element: Any) -> dict:
     raw = GetMultipleAttributeValues(element, _EARLY_TRAVERSAL_ATTRIBUTES)
     pos = _parse_ax_position(raw.get(Attribute.Position))
     size = _parse_ax_size(raw.get(Attribute.Size))
-    rect = Rect.from_position_size(pos[0], pos[1], size[0], size[1]) if pos and size else None
+    rect = (
+        Rect.from_position_size(pos[0], pos[1], size[0], size[1])
+        if pos and size
+        else None
+    )
     return {
-        'role': raw.get(Attribute.Role) or '',
-        'hidden': raw.get(Attribute.Hidden) is True,
-        'enabled': raw.get(Attribute.Enabled) is not False,
-        'help': raw.get(Attribute.Help) or '',
-        'has_popup': raw.get(Attribute.HasPopup) is True,
-        'title_ui_element': raw.get(Attribute.TitleUIElement),
-        'rect': rect,
-        'children': raw.get(Attribute.Children) or [],
+        "role": raw.get(Attribute.Role) or "",
+        "hidden": raw.get(Attribute.Hidden) is True,
+        "enabled": raw.get(Attribute.Enabled) is not False,
+        "help": raw.get(Attribute.Help) or "",
+        "has_popup": raw.get(Attribute.HasPopup) is True,
+        "title_ui_element": raw.get(Attribute.TitleUIElement),
+        "rect": rect,
+        "children": raw.get(Attribute.Children) or [],
     }
 
 
@@ -529,24 +561,24 @@ def GetLateTraversalBatch(element: Any) -> dict:
     TitleUIElement resolution is handled by the caller using the ref from the early batch.
     """
     raw = GetMultipleAttributeValues(element, _LATE_TRAVERSAL_ATTRIBUTES)
-    title = raw.get(Attribute.Title) or ''
-    identifier = raw.get(Attribute.Identifier) or ''
-    description = raw.get(Attribute.Description) or ''
+    title = raw.get(Attribute.Title) or ""
+    identifier = raw.get(Attribute.Identifier) or ""
+    description = raw.get(Attribute.Description) or ""
     value = raw.get(Attribute.Value)
-    value_str = str(value) if value is not None else ''
+    value_str = str(value) if value is not None else ""
     label = title or description or value_str or identifier
     url = raw.get(Attribute.URL)
     placeholder = raw.get(Attribute.PlaceholderValue)
     return {
-        'subrole': raw.get(Attribute.Subrole) or '',
-        'title': title,
-        'description': description,
-        'identifier': identifier,
-        'value': value,
-        'placeholder': str(placeholder) if placeholder is not None else None,
-        'url': str(url) if url is not None else None,
-        'expanded': raw.get(Attribute.Expanded) is True,
-        'label': label,
+        "subrole": raw.get(Attribute.Subrole) or "",
+        "title": title,
+        "description": description,
+        "identifier": identifier,
+        "value": value,
+        "placeholder": str(placeholder) if placeholder is not None else None,
+        "url": str(url) if url is not None else None,
+        "expanded": raw.get(Attribute.Expanded) is True,
+        "label": label,
     }
 
 
@@ -694,7 +726,7 @@ def GetActionDescription(element: Any, action: str) -> str:
             return str(description)
     except Exception:
         pass
-    return ''
+    return ""
 
 
 def SetMessagingTimeout(element: Any, timeout: float) -> bool:
@@ -739,6 +771,7 @@ def GetMessagingTimeout(element: Any) -> Optional[float]:
 # Screen Functions
 # =============================================================================
 
+
 def GetScreenSize() -> Tuple[int, int]:
     """
     Get the combined resolution of all active displays (virtual screen size).
@@ -750,10 +783,10 @@ def GetScreenSize() -> Tuple[int, int]:
         res = CGGetActiveDisplayList(max_displays, None, None)
         if res and res[1]:
             display_ids = res[1]
-            min_x = float('inf')
-            min_y = float('inf')
-            max_x = float('-inf')
-            max_y = float('-inf')
+            min_x = float("inf")
+            min_y = float("inf")
+            max_x = float("-inf")
+            max_y = float("-inf")
             for display_id in display_ids:
                 bounds = CGDisplayBounds(display_id)
                 x = bounds.origin.x
@@ -771,8 +804,12 @@ def GetScreenSize() -> Tuple[int, int]:
     # Fallback to main display
     main_display = CGMainDisplayID()
     mode = CGDisplayCopyDisplayMode(main_display)
-    width = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
-    height = CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(main_display)
+    width = (
+        CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
+    )
+    height = (
+        CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(main_display)
+    )
     return (width, height)
 
 
@@ -780,8 +817,12 @@ def GetMainDisplaySize() -> Tuple[int, int]:
     """Get the resolution of the main display. Returns (width, height)."""
     main_display = CGMainDisplayID()
     mode = CGDisplayCopyDisplayMode(main_display)
-    width = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
-    height = CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(main_display)
+    width = (
+        CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
+    )
+    height = (
+        CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(main_display)
+    )
     return (width, height)
 
 
@@ -804,12 +845,14 @@ def GetDisplayBounds() -> list[Rect]:
         if res and res[1]:
             for display_id in res[1]:
                 bounds = CGDisplayBounds(display_id)
-                rects.append(Rect(
-                    left=bounds.origin.x,
-                    top=bounds.origin.y,
-                    right=bounds.origin.x + bounds.size.width,
-                    bottom=bounds.origin.y + bounds.size.height,
-                ))
+                rects.append(
+                    Rect(
+                        left=bounds.origin.x,
+                        top=bounds.origin.y,
+                        right=bounds.origin.x + bounds.size.width,
+                        bottom=bounds.origin.y + bounds.size.height,
+                    )
+                )
     except Exception:
         pass
     return rects
@@ -823,7 +866,11 @@ def GetDPIScale() -> float:
     try:
         main_display = CGMainDisplayID()
         mode = CGDisplayCopyDisplayMode(main_display)
-        pixel_width = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(main_display)
+        pixel_width = (
+            CGDisplayModeGetPixelWidth(mode)
+            if mode
+            else CGDisplayPixelsWide(main_display)
+        )
         bounds = CGDisplayBounds(main_display)
         point_width = bounds.size.width
         if point_width > 0:
@@ -855,25 +902,36 @@ def GetPerDisplayInfo() -> list[dict]:
                 lw = bounds.size.width
                 lh = bounds.size.height
                 mode = CGDisplayCopyDisplayMode(display_id)
-                pw = CGDisplayModeGetPixelWidth(mode) if mode else CGDisplayPixelsWide(display_id)
-                ph = CGDisplayModeGetPixelHeight(mode) if mode else CGDisplayPixelsHigh(display_id)
-                displays.append({
-                    'logical_left': bounds.origin.x,
-                    'logical_top': bounds.origin.y,
-                    'logical_width': lw,
-                    'logical_height': lh,
-                    'pixel_width': pw,
-                    'pixel_height': ph,
-                    'scale': pw / lw if lw > 0 else 1.0,
-                })
+                pw = (
+                    CGDisplayModeGetPixelWidth(mode)
+                    if mode
+                    else CGDisplayPixelsWide(display_id)
+                )
+                ph = (
+                    CGDisplayModeGetPixelHeight(mode)
+                    if mode
+                    else CGDisplayPixelsHigh(display_id)
+                )
+                displays.append(
+                    {
+                        "logical_left": bounds.origin.x,
+                        "logical_top": bounds.origin.y,
+                        "logical_width": lw,
+                        "logical_height": lh,
+                        "pixel_width": pw,
+                        "pixel_height": ph,
+                        "scale": pw / lw if lw > 0 else 1.0,
+                    }
+                )
     except Exception:
         pass
-    return sorted(displays, key=lambda d: d['logical_left'])
+    return sorted(displays, key=lambda d: d["logical_left"])
 
 
 # =============================================================================
 # Screenshot Functions
 # =============================================================================
+
 
 def CaptureScreen(rect=None):
     """
@@ -903,6 +961,7 @@ def CGImageToPIL(cg_image):
     Requires Pillow to be installed.
     """
     from PIL import Image
+
     width = CGImageGetWidth(cg_image)
     height = CGImageGetHeight(cg_image)
     bytes_per_row = CGImageGetBytesPerRow(cg_image)
@@ -915,6 +974,7 @@ def CGImageToPIL(cg_image):
 # =============================================================================
 # Mouse Functions
 # =============================================================================
+
 
 def GetCursorPos() -> Tuple[int, int]:
     """
@@ -931,7 +991,9 @@ def SetCursorPos(x: int, y: int) -> None:
     Move the mouse cursor to the specified position.
     Equivalent to Windows SetCursorPos.
     """
-    event = CGEventCreateMouseEvent(None, kCGEventMouseMoved, (x, y), kCGMouseButtonLeft)
+    event = CGEventCreateMouseEvent(
+        None, kCGEventMouseMoved, (x, y), kCGMouseButtonLeft
+    )
     CGEventPost(kCGHIDEventTap, event)
 
 
@@ -945,8 +1007,12 @@ def Click(x: int, y: int, waitTime: float = 0.05) -> None:
     Perform a left mouse click at the specified coordinates.
     Equivalent to Windows UIA Click().
     """
-    event_down = CGEventCreateMouseEvent(None, kCGEventLeftMouseDown, (x, y), kCGMouseButtonLeft)
-    event_up = CGEventCreateMouseEvent(None, kCGEventLeftMouseUp, (x, y), kCGMouseButtonLeft)
+    event_down = CGEventCreateMouseEvent(
+        None, kCGEventLeftMouseDown, (x, y), kCGMouseButtonLeft
+    )
+    event_up = CGEventCreateMouseEvent(
+        None, kCGEventLeftMouseUp, (x, y), kCGMouseButtonLeft
+    )
     CGEventPost(kCGHIDEventTap, event_down)
     time.sleep(waitTime)
     CGEventPost(kCGHIDEventTap, event_up)
@@ -954,8 +1020,12 @@ def Click(x: int, y: int, waitTime: float = 0.05) -> None:
 
 def RightClick(x: int, y: int, waitTime: float = 0.05) -> None:
     """Perform a right mouse click at the specified coordinates."""
-    event_down = CGEventCreateMouseEvent(None, kCGEventRightMouseDown, (x, y), kCGMouseButtonRight)
-    event_up = CGEventCreateMouseEvent(None, kCGEventRightMouseUp, (x, y), kCGMouseButtonRight)
+    event_down = CGEventCreateMouseEvent(
+        None, kCGEventRightMouseDown, (x, y), kCGMouseButtonRight
+    )
+    event_up = CGEventCreateMouseEvent(
+        None, kCGEventRightMouseUp, (x, y), kCGMouseButtonRight
+    )
     CGEventPost(kCGHIDEventTap, event_down)
     time.sleep(waitTime)
     CGEventPost(kCGHIDEventTap, event_up)
@@ -963,8 +1033,12 @@ def RightClick(x: int, y: int, waitTime: float = 0.05) -> None:
 
 def MiddleClick(x: int, y: int, waitTime: float = 0.05) -> None:
     """Perform a middle mouse click at the specified coordinates."""
-    event_down = CGEventCreateMouseEvent(None, kCGEventOtherMouseDown, (x, y), kCGMouseButtonCenter)
-    event_up = CGEventCreateMouseEvent(None, kCGEventOtherMouseUp, (x, y), kCGMouseButtonCenter)
+    event_down = CGEventCreateMouseEvent(
+        None, kCGEventOtherMouseDown, (x, y), kCGMouseButtonCenter
+    )
+    event_up = CGEventCreateMouseEvent(
+        None, kCGEventOtherMouseUp, (x, y), kCGMouseButtonCenter
+    )
     CGEventPost(kCGHIDEventTap, event_down)
     time.sleep(waitTime)
     CGEventPost(kCGHIDEventTap, event_up)
@@ -972,22 +1046,34 @@ def MiddleClick(x: int, y: int, waitTime: float = 0.05) -> None:
 
 def DoubleClick(x: int, y: int, waitTime: float = 0.05) -> None:
     """Perform a double left-click at the specified coordinates."""
-    event_down = CGEventCreateMouseEvent(None, kCGEventLeftMouseDown, (x, y), kCGMouseButtonLeft)
+    event_down = CGEventCreateMouseEvent(
+        None, kCGEventLeftMouseDown, (x, y), kCGMouseButtonLeft
+    )
     CGEventSetIntegerValueField(event_down, Quartz.kCGMouseEventClickState, 2)
-    event_up = CGEventCreateMouseEvent(None, kCGEventLeftMouseUp, (x, y), kCGMouseButtonLeft)
+    event_up = CGEventCreateMouseEvent(
+        None, kCGEventLeftMouseUp, (x, y), kCGMouseButtonLeft
+    )
     CGEventSetIntegerValueField(event_up, Quartz.kCGMouseEventClickState, 2)
     CGEventPost(kCGHIDEventTap, event_down)
     time.sleep(waitTime)
     CGEventPost(kCGHIDEventTap, event_up)
 
 
-def DragTo(start_x: int, start_y: int, end_x: int, end_y: int,
-           duration: float = 0.5, steps: int = 20) -> None:
+def DragTo(
+    start_x: int,
+    start_y: int,
+    end_x: int,
+    end_y: int,
+    duration: float = 0.5,
+    steps: int = 20,
+) -> None:
     """
     Perform a mouse drag from start to end position.
     """
     # Mouse down at start
-    event_down = CGEventCreateMouseEvent(None, kCGEventLeftMouseDown, (start_x, start_y), kCGMouseButtonLeft)
+    event_down = CGEventCreateMouseEvent(
+        None, kCGEventLeftMouseDown, (start_x, start_y), kCGMouseButtonLeft
+    )
     CGEventPost(kCGHIDEventTap, event_down)
     time.sleep(0.05)
 
@@ -997,12 +1083,16 @@ def DragTo(start_x: int, start_y: int, end_x: int, end_y: int,
         progress = i / steps
         cx = start_x + (end_x - start_x) * progress
         cy = start_y + (end_y - start_y) * progress
-        event_drag = CGEventCreateMouseEvent(None, kCGEventLeftMouseDragged, (cx, cy), kCGMouseButtonLeft)
+        event_drag = CGEventCreateMouseEvent(
+            None, kCGEventLeftMouseDragged, (cx, cy), kCGMouseButtonLeft
+        )
         CGEventPost(kCGHIDEventTap, event_drag)
         time.sleep(step_delay)
 
     # Mouse up at end
-    event_up = CGEventCreateMouseEvent(None, kCGEventLeftMouseUp, (end_x, end_y), kCGMouseButtonLeft)
+    event_up = CGEventCreateMouseEvent(
+        None, kCGEventLeftMouseUp, (end_x, end_y), kCGMouseButtonLeft
+    )
     CGEventPost(kCGHIDEventTap, event_up)
 
 
@@ -1044,6 +1134,7 @@ def WheelRight(clicks: int = 1, interval: float = 0.05) -> None:
 # =============================================================================
 # Keyboard Functions
 # =============================================================================
+
 
 def KeyDown(key_code: int, flags: int = 0) -> None:
     """
@@ -1123,8 +1214,14 @@ def _release_modifiers() -> None:
     for Command, Shift, Option, and Control on both left and right sides.
     """
     modifier_keycodes = [
-        KeyCode.Command, KeyCode.Shift, KeyCode.Option, KeyCode.Control,
-        KeyCode.RightCommand, KeyCode.RightShift, KeyCode.RightOption, KeyCode.RightControl,
+        KeyCode.Command,
+        KeyCode.Shift,
+        KeyCode.Option,
+        KeyCode.Control,
+        KeyCode.RightCommand,
+        KeyCode.RightShift,
+        KeyCode.RightOption,
+        KeyCode.RightControl,
     ]
     for kc in modifier_keycodes:
         event = CGEventCreateKeyboardEvent(None, kc, False)
@@ -1180,11 +1277,11 @@ def _type_character(char: str, interval: float = 0.01) -> None:
         if char.isupper():
             flags = kCGEventFlagMaskShift
         KeyPress(key_code, flags, interval)
-    elif char == ' ':
+    elif char == " ":
         KeyPress(KeyCode.Space, 0, interval)
-    elif char == '\n':
+    elif char == "\n":
         KeyPress(KeyCode.Return, 0, interval)
-    elif char == '\t':
+    elif char == "\t":
         KeyPress(KeyCode.Tab, 0, interval)
     else:
         # Unicode character — use CGEventKeyboardSetUnicodeString
@@ -1206,7 +1303,7 @@ def _type_unicode_char(char: str) -> None:
     """
     # Encode to UTF-16LE to get the UniChar representation
     # Each UniChar is 2 bytes; surrogate pairs (e.g. emoji) produce 2 UniChars
-    utf16_bytes = char.encode('utf-16-le')
+    utf16_bytes = char.encode("utf-16-le")
     utf16_length = len(utf16_bytes) // 2  # Number of UniChar code units
 
     # Key down event with the Unicode string attached
@@ -1227,12 +1324,15 @@ def _type_unicode_char(char: str) -> None:
 # Window Functions
 # =============================================================================
 
+
 def GetWindowList(on_screen_only: bool = True) -> list["ApplicationControl"]:
     """
     Get list of window info dictionaries from the window server.
     Returns raw CGWindowListCopyWindowInfo results.
     """
-    options = kCGWindowListOptionOnScreenOnly if on_screen_only else kCGWindowListOptionAll
+    options = (
+        kCGWindowListOptionOnScreenOnly if on_screen_only else kCGWindowListOptionAll
+    )
     if on_screen_only:
         options |= kCGWindowListExcludeDesktopElements
     window_list = CGWindowListCopyWindowInfo(options, kCGNullWindowID)
@@ -1247,7 +1347,7 @@ def GetForegroundWindowPID() -> Optional[int]:
     """
     window_list = CGWindowListCopyWindowInfo(
         kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
-        kCGNullWindowID
+        kCGNullWindowID,
     )
     if not window_list:
         return None
@@ -1278,6 +1378,7 @@ def ActivateApplication(pid: int) -> bool:
     Activate (bring to front) an application by PID.
     """
     from Cocoa import NSApplicationActivateIgnoringOtherApps
+
     workspace = NSWorkspace.sharedWorkspace()
     for app in workspace.runningApplications():
         if app.processIdentifier() == pid:
@@ -1291,7 +1392,7 @@ def LaunchApplication(name: str) -> bool:
     Returns True if successful.
     """
     try:
-        subprocess.run(['open', '-a', name], check=True, capture_output=True, text=True)
+        subprocess.run(["open", "-a", name], check=True, capture_output=True, text=True)
         return True
     except subprocess.CalledProcessError:
         pass
@@ -1364,6 +1465,7 @@ def GetApplicationPathByBundleID(bundle_id: str) -> Optional[str]:
 # Workspace: File & URL Operations
 # =============================================================================
 
+
 def OpenFile(path: str, application: Optional[str] = None) -> bool:
     """
     Open a file, optionally with a specific application.
@@ -1394,6 +1496,7 @@ def OpenURL(url_string: str) -> bool:
         True if the URL was opened successfully.
     """
     from Cocoa import NSURL
+
     workspace = NSWorkspace.sharedWorkspace()
     url = NSURL.URLWithString_(url_string)
     if url:
@@ -1413,7 +1516,7 @@ def SelectFileInFinder(path: str) -> bool:
         True if the file was revealed successfully.
     """
     workspace = NSWorkspace.sharedWorkspace()
-    return bool(workspace.selectFile_inFileViewerRootedAtPath_(path, ''))
+    return bool(workspace.selectFile_inFileViewerRootedAtPath_(path, ""))
 
 
 def RecycleFiles(paths: Sequence[str]) -> bool:
@@ -1427,6 +1530,7 @@ def RecycleFiles(paths: Sequence[str]) -> bool:
         True if the operation was initiated (actual completion is async).
     """
     from Cocoa import NSURL
+
     workspace = NSWorkspace.sharedWorkspace()
     urls = [NSURL.fileURLWithPath_(p) for p in paths]
     try:
@@ -1447,6 +1551,7 @@ def DuplicateFiles(paths: Sequence[str]) -> bool:
         True if the operation was initiated (actual completion is async).
     """
     from Cocoa import NSURL
+
     workspace = NSWorkspace.sharedWorkspace()
     urls = [NSURL.fileURLWithPath_(p) for p in paths]
     try:
@@ -1473,6 +1578,7 @@ def IsFilePackage(path: str) -> bool:
 # =============================================================================
 # Workspace: Icons
 # =============================================================================
+
 
 def GetIconForFile(path: str) -> Optional[Any]:
     """
@@ -1530,6 +1636,7 @@ def GetIconForFiles(paths: Sequence[str]) -> Optional[Any]:
 # Workspace: File Information
 # =============================================================================
 
+
 def GetFileInfo(path: str) -> Optional[dict[str, Any]]:
     """
     Get information about a file (associated application and file type).
@@ -1548,8 +1655,8 @@ def GetFileInfo(path: str) -> Optional[dict[str, Any]]:
         )
         if success:
             return {
-                'application': str(app_path) if app_path else None,
-                'type': str(file_type) if file_type else None,
+                "application": str(app_path) if app_path else None,
+                "type": str(file_type) if file_type else None,
             }
     except Exception:
         pass
@@ -1579,6 +1686,7 @@ def GetLocalizedDescriptionForType(uti: str) -> Optional[str]:
 # Workspace: Desktop Wallpaper
 # =============================================================================
 
+
 def GetDesktopImageURL(screen_index: int = 0) -> Optional[str]:
     """
     Get the URL of the current desktop wallpaper image.
@@ -1590,6 +1698,7 @@ def GetDesktopImageURL(screen_index: int = 0) -> Optional[str]:
         File URL string of the wallpaper, or None.
     """
     from Cocoa import NSScreen
+
     workspace = NSWorkspace.sharedWorkspace()
     try:
         screens = NSScreen.screens()
@@ -1613,6 +1722,7 @@ def SetDesktopImage(path: str, screen_index: int = 0) -> bool:
         True if the wallpaper was set successfully.
     """
     from Cocoa import NSScreen, NSURL
+
     workspace = NSWorkspace.sharedWorkspace()
     try:
         screens = NSScreen.screens()
@@ -1630,6 +1740,7 @@ def SetDesktopImage(path: str, screen_index: int = 0) -> bool:
 # =============================================================================
 # Workspace: Notification Center
 # =============================================================================
+
 
 def GetWorkspaceNotificationCenter() -> Any:
     """
@@ -1656,12 +1767,17 @@ def GetWorkspaceNotificationCenter() -> Any:
 # System Info Functions
 # =============================================================================
 
+
 def GetMacOSVersion() -> str:
     """Get the macOS version string (e.g., 'macOS 15.3')."""
     try:
-        result = subprocess.run(['sw_vers', '-productVersion'], capture_output=True, text=True)
+        result = subprocess.run(
+            ["sw_vers", "-productVersion"], capture_output=True, text=True
+        )
         version = result.stdout.strip()
-        name_result = subprocess.run(['sw_vers', '-productName'], capture_output=True, text=True)
+        name_result = subprocess.run(
+            ["sw_vers", "-productName"], capture_output=True, text=True
+        )
         name = name_result.stdout.strip()
         return f"{name} {version}"
     except Exception:
@@ -1672,19 +1788,20 @@ def GetDefaultLanguage() -> str:
     """Get the default system language."""
     try:
         result = subprocess.run(
-            ['defaults', 'read', '-g', 'AppleLanguages'],
-            capture_output=True, text=True
+            ["defaults", "read", "-g", "AppleLanguages"], capture_output=True, text=True
         )
         langs = result.stdout.strip()
-        if langs.startswith('('):
-            first_lang = langs.split(',')[0].strip('() "')
+        if langs.startswith("("):
+            first_lang = langs.split(",")[0].strip('() "')
             return first_lang
         return "en-US"
     except Exception:
         return "en-US"
 
 
-def ExecuteCommand(command: str, mode: str = 'shell', timeout: int = 10) -> Tuple[str, int]:
+def ExecuteCommand(
+    command: str, mode: str = "shell", timeout: int = 10
+) -> Tuple[str, int]:
     """
     Execute a command in shell or osascript mode.
 
@@ -1698,13 +1815,17 @@ def ExecuteCommand(command: str, mode: str = 'shell', timeout: int = 10) -> Tupl
     """
     import os
     import shlex
+
     env = os.environ.copy()
     try:
-        if mode == 'osascript':
+        if mode == "osascript":
             escaped_command = command.replace('"', '\\"')
             result = subprocess.run(
-                ['osascript', '-e', escaped_command],
-                capture_output=True, text=True, timeout=timeout, env=env
+                ["osascript", "-e", escaped_command],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
             )
         else:
             try:
@@ -1712,10 +1833,9 @@ def ExecuteCommand(command: str, mode: str = 'shell', timeout: int = 10) -> Tupl
             except ValueError as e:
                 return (f"Invalid command syntax: {e}", -1)
             result = subprocess.run(
-                args,
-                capture_output=True, text=True, timeout=timeout, env=env
+                args, capture_output=True, text=True, timeout=timeout, env=env
             )
-        output = result.stdout or result.stderr or ''
+        output = result.stdout or result.stderr or ""
         return (output.strip(), result.returncode)
     except subprocess.TimeoutExpired:
         return (f"Command timed out after {timeout} seconds", -1)
@@ -1726,6 +1846,7 @@ def ExecuteCommand(command: str, mode: str = 'shell', timeout: int = 10) -> Tupl
 # =============================================================================
 # High-level Convenience Functions (Control-based)
 # =============================================================================
+
 
 def GetFrontmostApplication() -> Optional["ApplicationControl"]:
     """
@@ -1743,6 +1864,7 @@ def GetFrontmostApplication() -> Optional["ApplicationControl"]:
         ApplicationControl or None.
     """
     from .controls import ApplicationControl
+
     pid = GetForegroundWindowPID()
     if pid:
         return ApplicationControl(pid=pid)
@@ -1757,6 +1879,7 @@ def GetForegroundControl() -> Optional["WindowControl"]:
         WindowControl or None.
     """
     from .controls import ApplicationControl
+
     pid = GetForegroundWindowPID()
     if pid:
         app = ApplicationControl(pid=pid)
@@ -1772,6 +1895,7 @@ def GetFocusedControl() -> Optional["Control"]:
         A typed Control subclass or None.
     """
     from .controls import ApplicationControl
+
     pid = GetForegroundWindowPID()
     if pid:
         app = ApplicationControl(pid=pid)
@@ -1808,14 +1932,15 @@ def GetRunningApplications(
         List of ApplicationControl matching the filters.
     """
     from .controls import ApplicationControl
+
     raw_apps = NSWorkspace.sharedWorkspace().runningApplications()
     apps = [ApplicationControl(pid=a.processIdentifier()) for a in raw_apps]
 
     if policy is not None:
-        policies = {p.strip() for p in policy.split('+')}
+        policies = {p.strip() for p in policy.split("+")}
         apps = [a for a in apps if a.ActivationPolicy in policies]
     if status is not None:
-        statuses = {s.strip() for s in status.split('+')}
+        statuses = {s.strip() for s in status.split("+")}
         apps = [a for a in apps if a.Status in statuses]
 
     return apps
@@ -1832,6 +1957,7 @@ def GetRunningApplicationByName(name: str) -> Optional["ApplicationControl"]:
         ApplicationControl if found, None otherwise.
     """
     from .controls import ApplicationControl
+
     name_lower = name.strip().lower()
     for app in NSWorkspace.sharedWorkspace().runningApplications():
         local_name = app.localizedName()
@@ -1851,9 +1977,9 @@ def GetRunningApplicationByBundleId(bundle_id: str) -> Optional["ApplicationCont
         ApplicationControl if found, None otherwise.
     """
     from .controls import ApplicationControl
+
     for app in NSWorkspace.sharedWorkspace().runningApplications():
         bid = app.bundleIdentifier()
         if bid and str(bid) == bundle_id:
             return ApplicationControl(pid=app.processIdentifier())
     return None
-

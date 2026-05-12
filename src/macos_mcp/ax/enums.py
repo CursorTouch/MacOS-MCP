@@ -11,11 +11,13 @@ Equivalent to the Windows UIA enums.py module, adapted for macOS.
 # Error Codes
 # =============================================================================
 
+
 class AXError:
     """
     Error codes returned by AXUIElement functions.
     Refer: ApplicationServices/HIServices/AXError.h
     """
+
     Success = 0
     Failure = -25200
     IllegalArgument = -25201
@@ -35,22 +37,22 @@ class AXError:
 
 
 AXErrorNames = {
-    AXError.Success: 'Success',
-    AXError.Failure: 'Failure',
-    AXError.IllegalArgument: 'IllegalArgument',
-    AXError.InvalidUIElement: 'InvalidUIElement',
-    AXError.InvalidUIElementObserver: 'InvalidUIElementObserver',
-    AXError.CannotComplete: 'CannotComplete',
-    AXError.AttributeUnsupported: 'AttributeUnsupported',
-    AXError.ActionUnsupported: 'ActionUnsupported',
-    AXError.NotificationUnsupported: 'NotificationUnsupported',
-    AXError.NotImplemented: 'NotImplemented',
-    AXError.NotificationAlreadyRegistered: 'NotificationAlreadyRegistered',
-    AXError.NotificationNotRegistered: 'NotificationNotRegistered',
-    AXError.APIDisabled: 'APIDisabled',
-    AXError.NoValue: 'NoValue',
-    AXError.ParameterizedAttributeUnsupported: 'ParameterizedAttributeUnsupported',
-    AXError.NotEnoughPrecision: 'NotEnoughPrecision',
+    AXError.Success: "Success",
+    AXError.Failure: "Failure",
+    AXError.IllegalArgument: "IllegalArgument",
+    AXError.InvalidUIElement: "InvalidUIElement",
+    AXError.InvalidUIElementObserver: "InvalidUIElementObserver",
+    AXError.CannotComplete: "CannotComplete",
+    AXError.AttributeUnsupported: "AttributeUnsupported",
+    AXError.ActionUnsupported: "ActionUnsupported",
+    AXError.NotificationUnsupported: "NotificationUnsupported",
+    AXError.NotImplemented: "NotImplemented",
+    AXError.NotificationAlreadyRegistered: "NotificationAlreadyRegistered",
+    AXError.NotificationNotRegistered: "NotificationNotRegistered",
+    AXError.APIDisabled: "APIDisabled",
+    AXError.NoValue: "NoValue",
+    AXError.ParameterizedAttributeUnsupported: "ParameterizedAttributeUnsupported",
+    AXError.NotEnoughPrecision: "NotEnoughPrecision",
 }
 
 
@@ -58,153 +60,164 @@ AXErrorNames = {
 # Roles
 # =============================================================================
 
+
 class Role:
     """
     Accessibility roles representing the type of UI element.
     Equivalent to Windows UIA ControlType, but using macOS AX role strings.
     Refer: HIServices/AXRoleConstants.h
     """
+
     # Standard UI Controls
-    Application = 'AXApplication'
-    Browser = 'AXBrowser'
-    BusyIndicator = 'AXBusyIndicator'
-    Button = 'AXButton'
-    Cell = 'AXCell'
-    CheckBox = 'AXCheckBox'
-    ColorWell = 'AXColorWell'
-    Column = 'AXColumn'
-    ComboBox = 'AXComboBox'
-    DateField = 'AXDateField'
-    DisclosureTriangle = 'AXDisclosureTriangle'
-    Dock = 'AXDock'
-    DockItem = 'AXDockItem'
-    Drawer = 'AXDrawer'
-    Grid = 'AXGrid'
-    Group = 'AXGroup'
-    GrowArea = 'AXGrowArea'
-    Handle = 'AXHandle'
-    HelpTag = 'AXHelpTag'
-    Image = 'AXImage'
-    Incrementor = 'AXIncrementor'
-    LayoutArea = 'AXLayoutArea'
-    LayoutItem = 'AXLayoutItem'
-    LevelIndicator = 'AXLevelIndicator'
-    Link = 'AXLink'
-    List = 'AXList'
-    Matte = 'AXMatte'
-    Menu = 'AXMenu'
-    MenuBar = 'AXMenuBar'
-    MenuBarItem = 'AXMenuBarItem'
-    MenuButton = 'AXMenuButton'
-    MenuItem = 'AXMenuItem'
-    Outline = 'AXOutline'
-    OutlineRow = 'AXOutlineRow'
-    PageRole = 'AXPage'
-    Popover = 'AXPopover'
-    PopUpButton = 'AXPopUpButton'
-    ProgressIndicator = 'AXProgressIndicator'
-    RadioButton = 'AXRadioButton'
-    RadioGroup = 'AXRadioGroup'
-    RelevanceIndicator = 'AXRelevanceIndicator'
-    Row = 'AXRow'
-    Ruler = 'AXRuler'
-    RulerMarker = 'AXRulerMarker'
-    ScrollArea = 'AXScrollArea'
-    ScrollBar = 'AXScrollBar'
-    ScrollView = 'AXScrollView'
-    Sheet = 'AXSheet'
-    Slider = 'AXSlider'
-    SortButton = 'AXSortButton'
-    SplitGroup = 'AXSplitGroup'
-    Splitter = 'AXSplitter'
-    StaticText = 'AXStaticText'
-    SystemWide = 'AXSystemWide'
-    Tab = 'AXTab'
-    TabGroup = 'AXTabGroup'
-    Table = 'AXTable'
-    TextArea = 'AXTextArea'
-    TextField = 'AXTextField'
-    Toggle = 'AXToggle'
-    Toolbar = 'AXToolbar'
-    Unknown = 'AXUnknown'
-    ValueIndicator = 'AXValueIndicator'
-    Window = 'AXWindow'
+    Application = "AXApplication"
+    Browser = "AXBrowser"
+    BusyIndicator = "AXBusyIndicator"
+    Button = "AXButton"
+    Cell = "AXCell"
+    CheckBox = "AXCheckBox"
+    ColorWell = "AXColorWell"
+    Column = "AXColumn"
+    ComboBox = "AXComboBox"
+    DateField = "AXDateField"
+    DisclosureTriangle = "AXDisclosureTriangle"
+    Dock = "AXDock"
+    DockItem = "AXDockItem"
+    Drawer = "AXDrawer"
+    Grid = "AXGrid"
+    Group = "AXGroup"
+    GrowArea = "AXGrowArea"
+    Handle = "AXHandle"
+    HelpTag = "AXHelpTag"
+    Image = "AXImage"
+    Incrementor = "AXIncrementor"
+    LayoutArea = "AXLayoutArea"
+    LayoutItem = "AXLayoutItem"
+    LevelIndicator = "AXLevelIndicator"
+    Link = "AXLink"
+    List = "AXList"
+    Matte = "AXMatte"
+    Menu = "AXMenu"
+    MenuBar = "AXMenuBar"
+    MenuBarItem = "AXMenuBarItem"
+    MenuButton = "AXMenuButton"
+    MenuItem = "AXMenuItem"
+    Outline = "AXOutline"
+    OutlineRow = "AXOutlineRow"
+    PageRole = "AXPage"
+    Popover = "AXPopover"
+    PopUpButton = "AXPopUpButton"
+    ProgressIndicator = "AXProgressIndicator"
+    RadioButton = "AXRadioButton"
+    RadioGroup = "AXRadioGroup"
+    RelevanceIndicator = "AXRelevanceIndicator"
+    Row = "AXRow"
+    Ruler = "AXRuler"
+    RulerMarker = "AXRulerMarker"
+    ScrollArea = "AXScrollArea"
+    ScrollBar = "AXScrollBar"
+    ScrollView = "AXScrollView"
+    Sheet = "AXSheet"
+    Slider = "AXSlider"
+    SortButton = "AXSortButton"
+    SplitGroup = "AXSplitGroup"
+    Splitter = "AXSplitter"
+    StaticText = "AXStaticText"
+    SystemWide = "AXSystemWide"
+    Tab = "AXTab"
+    TabGroup = "AXTabGroup"
+    Table = "AXTable"
+    TextArea = "AXTextArea"
+    TextField = "AXTextField"
+    Toggle = "AXToggle"
+    Toolbar = "AXToolbar"
+    Unknown = "AXUnknown"
+    ValueIndicator = "AXValueIndicator"
+    Window = "AXWindow"
 
     # Web-specific roles
-    WebArea = 'AXWebArea'
+    WebArea = "AXWebArea"
 
     # Modern/SwiftUI roles
-    Switch = 'AXSwitch'
+    Switch = "AXSwitch"
 
 
-RoleNames = {v: k for k, v in vars(Role).items() if not k.startswith('_') and isinstance(v, str)}
+RoleNames = {
+    v: k for k, v in vars(Role).items() if not k.startswith("_") and isinstance(v, str)
+}
 
 
 # =============================================================================
 # Subroles
 # =============================================================================
 
+
 class Subrole:
     """
     Accessibility subroles providing additional type information.
     Refer: HIServices/AXRoleConstants.h
     """
+
     # Window subroles
-    CloseButton = 'AXCloseButton'
-    MinimizeButton = 'AXMinimizeButton'
-    ZoomButton = 'AXZoomButton'
-    FullScreenButton = 'AXFullScreenButton'
-    ToolbarButton = 'AXToolbarButton'
-    StandardWindow = 'AXStandardWindow'
-    Dialog = 'AXDialog'
-    SystemDialog = 'AXSystemDialog'
-    FloatingWindow = 'AXFloatingWindow'
-    SystemFloatingWindow = 'AXSystemFloatingWindow'
-    FullScreenWindow = 'AXFullScreenWindow'
+    CloseButton = "AXCloseButton"
+    MinimizeButton = "AXMinimizeButton"
+    ZoomButton = "AXZoomButton"
+    FullScreenButton = "AXFullScreenButton"
+    ToolbarButton = "AXToolbarButton"
+    StandardWindow = "AXStandardWindow"
+    Dialog = "AXDialog"
+    SystemDialog = "AXSystemDialog"
+    FloatingWindow = "AXFloatingWindow"
+    SystemFloatingWindow = "AXSystemFloatingWindow"
+    FullScreenWindow = "AXFullScreenWindow"
 
     # Text subroles
-    SecureTextField = 'AXSecureTextField'
-    SearchField = 'AXSearchField'
+    SecureTextField = "AXSecureTextField"
+    SearchField = "AXSearchField"
 
     # Button subroles
-    IncrementArrow = 'AXIncrementArrow'
-    DecrementArrow = 'AXDecrementArrow'
-    IncrementPage = 'AXIncrementPage'
-    DecrementPage = 'AXDecrementPage'
+    IncrementArrow = "AXIncrementArrow"
+    DecrementArrow = "AXDecrementArrow"
+    IncrementPage = "AXIncrementPage"
+    DecrementPage = "AXDecrementPage"
 
     # Table/List subroles
-    ContentList = 'AXContentList'
-    DefinitionList = 'AXDefinitionList'
-    SortButton = 'AXSortButton'
-    TableRow = 'AXTableRow'
-    OutlineRow = 'AXOutlineRow'
+    ContentList = "AXContentList"
+    DefinitionList = "AXDefinitionList"
+    SortButton = "AXSortButton"
+    TableRow = "AXTableRow"
+    OutlineRow = "AXOutlineRow"
 
     # Other subroles
-    ApplicationDockItem = 'AXApplicationDockItem'
-    DocumentDockItem = 'AXDocumentDockItem'
-    FolderDockItem = 'AXFolderDockItem'
-    MinimizedWindowDockItem = 'AXMinimizedWindowDockItem'
-    URLDockItem = 'AXURLDockItem'
-    DockExtraDockItem = 'AXDockExtraDockItem'
-    TrashDockItem = 'AXTrashDockItem'
-    SeparatorDockItem = 'AXSeparatorDockItem'
-    ProcessSwitcherList = 'AXProcessSwitcherList'
-    TabButton = 'AXTabButton'
-    CollectionList = 'AXCollectionList'
-    SectionList = 'AXSectionList'
-    Timeline = 'AXTimeline'
-    RatingIndicator = 'AXRatingIndicator'
-    Toggle = 'AXToggle'
-    Switch = 'AXSwitch'
-    DescriptionList = 'AXDescriptionList'
+    ApplicationDockItem = "AXApplicationDockItem"
+    DocumentDockItem = "AXDocumentDockItem"
+    FolderDockItem = "AXFolderDockItem"
+    MinimizedWindowDockItem = "AXMinimizedWindowDockItem"
+    URLDockItem = "AXURLDockItem"
+    DockExtraDockItem = "AXDockExtraDockItem"
+    TrashDockItem = "AXTrashDockItem"
+    SeparatorDockItem = "AXSeparatorDockItem"
+    ProcessSwitcherList = "AXProcessSwitcherList"
+    TabButton = "AXTabButton"
+    CollectionList = "AXCollectionList"
+    SectionList = "AXSectionList"
+    Timeline = "AXTimeline"
+    RatingIndicator = "AXRatingIndicator"
+    Toggle = "AXToggle"
+    Switch = "AXSwitch"
+    DescriptionList = "AXDescriptionList"
 
 
-SubroleNames = {v: k for k, v in vars(Subrole).items() if not k.startswith('_') and isinstance(v, str)}
+SubroleNames = {
+    v: k
+    for k, v in vars(Subrole).items()
+    if not k.startswith("_") and isinstance(v, str)
+}
 
 
 # =============================================================================
 # Attributes
 # =============================================================================
+
 
 class Attribute:
     """
@@ -212,155 +225,161 @@ class Attribute:
     Equivalent to Windows UIA PropertyId.
     Refer: HIServices/AXAttributeConstants.h
     """
+
     # Standard attributes (available on most elements)
-    Role = 'AXRole'
-    Subrole = 'AXSubrole'
-    RoleDescription = 'AXRoleDescription'
-    Title = 'AXTitle'
-    Description = 'AXDescription'
-    Help = 'AXHelp'
-    Value = 'AXValue'
-    MinValue = 'AXMinValue'
-    MaxValue = 'AXMaxValue'
-    ValueDescription = 'AXValueDescription'
-    Enabled = 'AXEnabled'
-    Focused = 'AXFocused'
-    Parent = 'AXParent'
-    Children = 'AXChildren'
-    SelectedChildren = 'AXSelectedChildren'
-    VisibleChildren = 'AXVisibleChildren'
-    Window = 'AXWindow'
-    TopLevelUIElement = 'AXTopLevelUIElement'
-    Position = 'AXPosition'
-    Size = 'AXSize'
-    Frame = 'AXFrame'
-    Contents = 'AXContents'
-    Identifier = 'AXIdentifier'
-    Hidden = 'AXHidden'
-    Selected = 'AXSelected'
+    Role = "AXRole"
+    Subrole = "AXSubrole"
+    RoleDescription = "AXRoleDescription"
+    Title = "AXTitle"
+    Description = "AXDescription"
+    Help = "AXHelp"
+    Value = "AXValue"
+    MinValue = "AXMinValue"
+    MaxValue = "AXMaxValue"
+    ValueDescription = "AXValueDescription"
+    Enabled = "AXEnabled"
+    Focused = "AXFocused"
+    Parent = "AXParent"
+    Children = "AXChildren"
+    SelectedChildren = "AXSelectedChildren"
+    VisibleChildren = "AXVisibleChildren"
+    Window = "AXWindow"
+    TopLevelUIElement = "AXTopLevelUIElement"
+    Position = "AXPosition"
+    Size = "AXSize"
+    Frame = "AXFrame"
+    Contents = "AXContents"
+    Identifier = "AXIdentifier"
+    Hidden = "AXHidden"
+    Selected = "AXSelected"
 
     # Text-specific attributes
-    NumberOfCharacters = 'AXNumberOfCharacters'
-    SelectedText = 'AXSelectedText'
-    SelectedTextRange = 'AXSelectedTextRange'
-    SelectedTextRanges = 'AXSelectedTextRanges'
-    VisibleCharacterRange = 'AXVisibleCharacterRange'
-    InsertionPointLineNumber = 'AXInsertionPointLineNumber'
-    SharedTextUIElements = 'AXSharedTextUIElements'
-    SharedCharacterRange = 'AXSharedCharacterRange'
-    StartTextMarker = 'AXStartTextMarker'
-    EndTextMarker = 'AXEndTextMarker'
-    SelectedTextMarkerRange = 'AXSelectedTextMarkerRange'
+    NumberOfCharacters = "AXNumberOfCharacters"
+    SelectedText = "AXSelectedText"
+    SelectedTextRange = "AXSelectedTextRange"
+    SelectedTextRanges = "AXSelectedTextRanges"
+    VisibleCharacterRange = "AXVisibleCharacterRange"
+    InsertionPointLineNumber = "AXInsertionPointLineNumber"
+    SharedTextUIElements = "AXSharedTextUIElements"
+    SharedCharacterRange = "AXSharedCharacterRange"
+    StartTextMarker = "AXStartTextMarker"
+    EndTextMarker = "AXEndTextMarker"
+    SelectedTextMarkerRange = "AXSelectedTextMarkerRange"
 
     # Window-specific attributes
-    Main = 'AXMain'
-    Minimized = 'AXMinimized'
-    CloseButton = 'AXCloseButton'
-    ZoomButton = 'AXZoomButton'
-    MinimizeButton = 'AXMinimizeButton'
-    ToolbarButton = 'AXToolbarButton'
-    FullScreenButton = 'AXFullScreenButton'
-    Proxy = 'AXProxy'
-    GrowArea = 'AXGrowArea'
-    Modal = 'AXModal'
-    DefaultButton = 'AXDefaultButton'
-    CancelButton = 'AXCancelButton'
-    FullScreen = 'AXFullScreen'
+    Main = "AXMain"
+    Minimized = "AXMinimized"
+    CloseButton = "AXCloseButton"
+    ZoomButton = "AXZoomButton"
+    MinimizeButton = "AXMinimizeButton"
+    ToolbarButton = "AXToolbarButton"
+    FullScreenButton = "AXFullScreenButton"
+    Proxy = "AXProxy"
+    GrowArea = "AXGrowArea"
+    Modal = "AXModal"
+    DefaultButton = "AXDefaultButton"
+    CancelButton = "AXCancelButton"
+    FullScreen = "AXFullScreen"
 
     # Application-specific attributes
-    MenuBar = 'AXMenuBar'
-    Windows = 'AXWindows'
-    FocusedWindow = 'AXFocusedWindow'
-    MainWindow = 'AXMainWindow'
-    FrontmostApplication = 'AXFrontmostApplication'
-    FocusedApplication = 'AXFocusedApplication'
-    FocusedUIElement = 'AXFocusedUIElement'
-    ExtrasMenuBar = 'AXExtrasMenuBar'
-    Enhanced = 'AXEnhancedUserInterface'
+    MenuBar = "AXMenuBar"
+    Windows = "AXWindows"
+    FocusedWindow = "AXFocusedWindow"
+    MainWindow = "AXMainWindow"
+    FrontmostApplication = "AXFrontmostApplication"
+    FocusedApplication = "AXFocusedApplication"
+    FocusedUIElement = "AXFocusedUIElement"
+    ExtrasMenuBar = "AXExtrasMenuBar"
+    Enhanced = "AXEnhancedUserInterface"
 
     # Menu-specific attributes
-    MenuItemCmdChar = 'AXMenuItemCmdChar'
-    MenuItemCmdVirtualKey = 'AXMenuItemCmdVirtualKey'
-    MenuItemCmdGlyph = 'AXMenuItemCmdGlyph'
-    MenuItemCmdModifiers = 'AXMenuItemCmdModifiers'
-    MenuItemMarkChar = 'AXMenuItemMarkChar'
-    MenuItemPrimaryUIElement = 'AXMenuItemPrimaryUIElement'
+    MenuItemCmdChar = "AXMenuItemCmdChar"
+    MenuItemCmdVirtualKey = "AXMenuItemCmdVirtualKey"
+    MenuItemCmdGlyph = "AXMenuItemCmdGlyph"
+    MenuItemCmdModifiers = "AXMenuItemCmdModifiers"
+    MenuItemMarkChar = "AXMenuItemMarkChar"
+    MenuItemPrimaryUIElement = "AXMenuItemPrimaryUIElement"
 
     # Table/Grid-specific attributes
-    Rows = 'AXRows'
-    VisibleRows = 'AXVisibleRows'
-    SelectedRows = 'AXSelectedRows'
-    Columns = 'AXColumns'
-    VisibleColumns = 'AXVisibleColumns'
-    SelectedColumns = 'AXSelectedColumns'
-    Header = 'AXHeader'
-    ColumnCount = 'AXColumnCount'
-    RowCount = 'AXRowCount'
-    Index = 'AXIndex'
-    ColumnHeaderUIElements = 'AXColumnHeaderUIElements'
-    RowHeaderUIElements = 'AXRowHeaderUIElements'
+    Rows = "AXRows"
+    VisibleRows = "AXVisibleRows"
+    SelectedRows = "AXSelectedRows"
+    Columns = "AXColumns"
+    VisibleColumns = "AXVisibleColumns"
+    SelectedColumns = "AXSelectedColumns"
+    Header = "AXHeader"
+    ColumnCount = "AXColumnCount"
+    RowCount = "AXRowCount"
+    Index = "AXIndex"
+    ColumnHeaderUIElements = "AXColumnHeaderUIElements"
+    RowHeaderUIElements = "AXRowHeaderUIElements"
 
     # Scroll-specific attributes
-    HorizontalScrollBar = 'AXHorizontalScrollBar'
-    VerticalScrollBar = 'AXVerticalScrollBar'
-    Orientation = 'AXOrientation'
+    HorizontalScrollBar = "AXHorizontalScrollBar"
+    VerticalScrollBar = "AXVerticalScrollBar"
+    Orientation = "AXOrientation"
 
     # Outline/Disclosure attributes
-    DisclosedRows = 'AXDisclosedRows'
-    DisclosedByRow = 'AXDisclosedByRow'
-    DisclosureLevel = 'AXDisclosureLevel'
-    Expanded = 'AXExpanded'
+    DisclosedRows = "AXDisclosedRows"
+    DisclosedByRow = "AXDisclosedByRow"
+    DisclosureLevel = "AXDisclosureLevel"
+    Expanded = "AXExpanded"
 
     # Misc attributes
-    Document = 'AXDocument'
-    URL = 'AXURL'
-    LabelValue = 'AXLabelValue'
-    LabelUIElements = 'AXLabelUIElements'
-    PlaceholderValue = 'AXPlaceholderValue'
-    Language = 'AXLanguage'
-    Actions = 'AXActions'
-    ColumnTitles = 'AXColumnTitles'
-    EditableAncestor = 'AXEditableAncestor'
-    LinkedUIElements = 'AXLinkedUIElements'
-    TitleUIElement = 'AXTitleUIElement'
-    ServesAsTitleForUIElements = 'AXServesAsTitleForUIElements'
-    HasPopup = 'AXHasPopup'
-    IsApplicationRunning = 'AXIsApplicationRunning'
+    Document = "AXDocument"
+    URL = "AXURL"
+    LabelValue = "AXLabelValue"
+    LabelUIElements = "AXLabelUIElements"
+    PlaceholderValue = "AXPlaceholderValue"
+    Language = "AXLanguage"
+    Actions = "AXActions"
+    ColumnTitles = "AXColumnTitles"
+    EditableAncestor = "AXEditableAncestor"
+    LinkedUIElements = "AXLinkedUIElements"
+    TitleUIElement = "AXTitleUIElement"
+    ServesAsTitleForUIElements = "AXServesAsTitleForUIElements"
+    HasPopup = "AXHasPopup"
+    IsApplicationRunning = "AXIsApplicationRunning"
 
     # Parameterized attributes (text)
-    LineForIndex = 'AXLineForIndexParameterized'
-    RangeForLine = 'AXRangeForLineParameterized'
-    StringForRange = 'AXStringForRangeParameterized'
-    RangeForPosition = 'AXRangeForPositionParameterized'
-    RangeForIndex = 'AXRangeForIndexParameterized'
-    BoundsForRange = 'AXBoundsForRangeParameterized'
-    AttributedStringForRange = 'AXAttributedStringForRangeParameterized'
-    RTFForRange = 'AXRTFForRangeParameterized'
-    StyleRangeForIndex = 'AXStyleRangeForIndexParameterized'
-    StringForTextMarkerRange = 'AXStringForTextMarkerRangeParameterized'
-    AttributedStringForTextMarkerRange = 'AXAttributedStringForTextMarkerRangeParameterized'
-    BoundsForTextMarkerRange = 'AXBoundsForTextMarkerRangeParameterized'
-    TextMarkerRangeForUnorderedTextMarkers = 'AXTextMarkerRangeForUnorderedTextMarkersParameterized'
+    LineForIndex = "AXLineForIndexParameterized"
+    RangeForLine = "AXRangeForLineParameterized"
+    StringForRange = "AXStringForRangeParameterized"
+    RangeForPosition = "AXRangeForPositionParameterized"
+    RangeForIndex = "AXRangeForIndexParameterized"
+    BoundsForRange = "AXBoundsForRangeParameterized"
+    AttributedStringForRange = "AXAttributedStringForRangeParameterized"
+    RTFForRange = "AXRTFForRangeParameterized"
+    StyleRangeForIndex = "AXStyleRangeForIndexParameterized"
+    StringForTextMarkerRange = "AXStringForTextMarkerRangeParameterized"
+    AttributedStringForTextMarkerRange = (
+        "AXAttributedStringForTextMarkerRangeParameterized"
+    )
+    BoundsForTextMarkerRange = "AXBoundsForTextMarkerRangeParameterized"
+    TextMarkerRangeForUnorderedTextMarkers = (
+        "AXTextMarkerRangeForUnorderedTextMarkersParameterized"
+    )
 
     # Date/Time field attributes
-    AMPMField = 'AXAMPMField'
-    DayField = 'AXDayField'
-    HourField = 'AXHourField'
-    MinuteField = 'AXMinuteField'
-    SecondField = 'AXSecondField'
-    MonthField = 'AXMonthField'
-    YearField = 'AXYearField'
-    IncrementorElement = 'AXIncrementor'
+    AMPMField = "AXAMPMField"
+    DayField = "AXDayField"
+    HourField = "AXHourField"
+    MinuteField = "AXMinuteField"
+    SecondField = "AXSecondField"
+    MonthField = "AXMonthField"
+    YearField = "AXYearField"
+    IncrementorElement = "AXIncrementor"
 
     # Additional documented attributes
-    AllowedValues = 'AXAllowedValues'
-    ValueIncrement = 'AXValueIncrement'
-    ColumnTitle = 'AXColumnTitle'
+    AllowedValues = "AXAllowedValues"
+    ValueIncrement = "AXValueIncrement"
+    ColumnTitle = "AXColumnTitle"
 
 
 # =============================================================================
 # Actions
 # =============================================================================
+
 
 class Action:
     """
@@ -368,28 +387,34 @@ class Action:
     Equivalent to Windows UIA patterns (InvokePattern.Invoke, etc.).
     Refer: HIServices/AXActionConstants.h
     """
-    Press = 'AXPress'
-    Increment = 'AXIncrement'
-    Decrement = 'AXDecrement'
-    Confirm = 'AXConfirm'
-    Cancel = 'AXCancel'
-    ShowMenu = 'AXShowMenu'
-    Pick = 'AXPick'
-    Raise = 'AXRaise'
-    ShowAlternateUI = 'AXShowAlternateUI'
-    ShowDefaultUI = 'AXShowDefaultUI'
-    ScrollLeftByPage = 'AXScrollLeftByPage'
-    ScrollRightByPage = 'AXScrollRightByPage'
-    ScrollUpByPage = 'AXScrollUpByPage'
-    ScrollDownByPage = 'AXScrollDownByPage'
+
+    Press = "AXPress"
+    Increment = "AXIncrement"
+    Decrement = "AXDecrement"
+    Confirm = "AXConfirm"
+    Cancel = "AXCancel"
+    ShowMenu = "AXShowMenu"
+    Pick = "AXPick"
+    Raise = "AXRaise"
+    ShowAlternateUI = "AXShowAlternateUI"
+    ShowDefaultUI = "AXShowDefaultUI"
+    ScrollLeftByPage = "AXScrollLeftByPage"
+    ScrollRightByPage = "AXScrollRightByPage"
+    ScrollUpByPage = "AXScrollUpByPage"
+    ScrollDownByPage = "AXScrollDownByPage"
 
 
-ActionNames = {v: k for k, v in vars(Action).items() if not k.startswith('_') and isinstance(v, str)}
+ActionNames = {
+    v: k
+    for k, v in vars(Action).items()
+    if not k.startswith("_") and isinstance(v, str)
+}
 
 
 # =============================================================================
 # Notifications
 # =============================================================================
+
 
 class Notification:
     """
@@ -397,59 +422,60 @@ class Notification:
     Equivalent to Windows UIA EventId.
     Refer: HIServices/AXNotificationConstants.h
     """
+
     # Focus notifications
-    FocusedUIElementChanged = 'AXFocusedUIElementChanged'
-    FocusedWindowChanged = 'AXFocusedWindowChanged'
-    ApplicationActivated = 'AXApplicationActivated'
-    ApplicationDeactivated = 'AXApplicationDeactivated'
-    ApplicationHidden = 'AXApplicationHidden'
-    ApplicationShown = 'AXApplicationShown'
+    FocusedUIElementChanged = "AXFocusedUIElementChanged"
+    FocusedWindowChanged = "AXFocusedWindowChanged"
+    ApplicationActivated = "AXApplicationActivated"
+    ApplicationDeactivated = "AXApplicationDeactivated"
+    ApplicationHidden = "AXApplicationHidden"
+    ApplicationShown = "AXApplicationShown"
 
     # Window notifications
-    WindowCreated = 'AXWindowCreated'
-    WindowMoved = 'AXWindowMoved'
-    WindowResized = 'AXWindowResized'
-    WindowMiniaturized = 'AXWindowMiniaturized'
-    WindowDeminiaturized = 'AXWindowDeminiaturized'
-    MainWindowChanged = 'AXMainWindowChanged'
+    WindowCreated = "AXWindowCreated"
+    WindowMoved = "AXWindowMoved"
+    WindowResized = "AXWindowResized"
+    WindowMiniaturized = "AXWindowMiniaturized"
+    WindowDeminiaturized = "AXWindowDeminiaturized"
+    MainWindowChanged = "AXMainWindowChanged"
 
     # Element lifecycle notifications
-    Created = 'AXCreated'
-    UIElementDestroyed = 'AXUIElementDestroyed'
+    Created = "AXCreated"
+    UIElementDestroyed = "AXUIElementDestroyed"
 
     # Menu notifications
-    MenuOpened = 'AXMenuOpened'
-    MenuClosed = 'AXMenuClosed'
-    MenuItemSelected = 'AXMenuItemSelected'
+    MenuOpened = "AXMenuOpened"
+    MenuClosed = "AXMenuClosed"
+    MenuItemSelected = "AXMenuItemSelected"
 
     # Value/Selection notifications
-    ValueChanged = 'AXValueChanged'
-    TitleChanged = 'AXTitleChanged'
-    SelectedTextChanged = 'AXSelectedTextChanged'
-    SelectedChildrenChanged = 'AXSelectedChildrenChanged'
-    SelectedChildrenMoved = 'AXSelectedChildrenMoved'
-    SelectedRowsChanged = 'AXSelectedRowsChanged'
-    SelectedColumnsChanged = 'AXSelectedColumnsChanged'
-    SelectedCellsChanged = 'AXSelectedCellsChanged'
-    RowCountChanged = 'AXRowCountChanged'
-    UnitsChanged = 'AXUnitsChanged'
+    ValueChanged = "AXValueChanged"
+    TitleChanged = "AXTitleChanged"
+    SelectedTextChanged = "AXSelectedTextChanged"
+    SelectedChildrenChanged = "AXSelectedChildrenChanged"
+    SelectedChildrenMoved = "AXSelectedChildrenMoved"
+    SelectedRowsChanged = "AXSelectedRowsChanged"
+    SelectedColumnsChanged = "AXSelectedColumnsChanged"
+    SelectedCellsChanged = "AXSelectedCellsChanged"
+    RowCountChanged = "AXRowCountChanged"
+    UnitsChanged = "AXUnitsChanged"
 
     # Layout notifications
-    Moved = 'AXMoved'
-    Resized = 'AXResized'
-    LayoutChanged = 'AXLayoutChanged'
+    Moved = "AXMoved"
+    Resized = "AXResized"
+    LayoutChanged = "AXLayoutChanged"
 
     # Drawer/Sheet notifications
-    DrawerCreated = 'AXDrawerCreated'
-    SheetCreated = 'AXSheetCreated'
-    HelpTagCreated = 'AXHelpTagCreated'
+    DrawerCreated = "AXDrawerCreated"
+    SheetCreated = "AXSheetCreated"
+    HelpTagCreated = "AXHelpTagCreated"
 
     # Expanded/Collapsed notifications
-    RowExpanded = 'AXRowExpanded'
-    RowCollapsed = 'AXRowCollapsed'
+    RowExpanded = "AXRowExpanded"
+    RowCollapsed = "AXRowCollapsed"
 
     # Announcement notifications
-    AnnouncementRequested = 'AXAnnouncementRequested'
+    AnnouncementRequested = "AXAnnouncementRequested"
 
 
 # Notification categories for easy filtering
@@ -487,12 +513,17 @@ ALL_NOTIFICATIONS = list(
 )
 
 
-NotificationNames = {v: k for k, v in vars(Notification).items() if not k.startswith('_') and isinstance(v, str)}
+NotificationNames = {
+    v: k
+    for k, v in vars(Notification).items()
+    if not k.startswith("_") and isinstance(v, str)
+}
 
 
 # =============================================================================
 # Notification Info Keys
 # =============================================================================
+
 
 class NotificationKey:
     """
@@ -500,14 +531,16 @@ class NotificationKey:
     Passed to AXObserverCallbackWithInfo callbacks.
     Refer: HIServices/AXNotificationConstants.h
     """
-    Announcement = 'AXAnnouncementKey'
-    Priority = 'AXPriorityKey'
-    UIElements = 'AXUIElementsKey'
+
+    Announcement = "AXAnnouncementKey"
+    Priority = "AXPriorityKey"
+    UIElements = "AXUIElementsKey"
 
 
 # =============================================================================
 # Virtual Key Codes (macOS)
 # =============================================================================
+
 
 class KeyCode:
     """
@@ -515,6 +548,7 @@ class KeyCode:
     Used with CGEventCreateKeyboardEvent.
     Refer: Carbon/HIToolbox/Events.h
     """
+
     # Letters
     A = 0x00
     S = 0x01
@@ -533,9 +567,9 @@ class KeyCode:
     R = 0x0F
     Y = 0x10
     T = 0x11
-    O = 0x1F
+    KeyO = 0x1F  # 'O' is ambiguous, use KeyO
     U = 0x20
-    I = 0x22
+    KeyI = 0x22  # 'I' is ambiguous, use KeyI
     P = 0x23
     L = 0x25
     J = 0x26
@@ -651,51 +685,102 @@ class KeyCode:
 # Key name to key code mapping for string-based key input
 KEY_NAME_TO_CODE = {
     # Letters (lowercase)
-    'a': KeyCode.A, 'b': KeyCode.B, 'c': KeyCode.C, 'd': KeyCode.D,
-    'e': KeyCode.E, 'f': KeyCode.F, 'g': KeyCode.G, 'h': KeyCode.H,
-    'i': KeyCode.I, 'j': KeyCode.J, 'k': KeyCode.K, 'l': KeyCode.L,
-    'm': KeyCode.M, 'n': KeyCode.N, 'o': KeyCode.O, 'p': KeyCode.P,
-    'q': KeyCode.Q, 'r': KeyCode.R, 's': KeyCode.S, 't': KeyCode.T,
-    'u': KeyCode.U, 'v': KeyCode.V, 'w': KeyCode.W, 'x': KeyCode.X,
-    'y': KeyCode.Y, 'z': KeyCode.Z,
+    "a": KeyCode.A,
+    "b": KeyCode.B,
+    "c": KeyCode.C,
+    "d": KeyCode.D,
+    "e": KeyCode.E,
+    "f": KeyCode.F,
+    "g": KeyCode.G,
+    "h": KeyCode.H,
+    "i": KeyCode.KeyI,
+    "j": KeyCode.J,
+    "k": KeyCode.K,
+    "l": KeyCode.L,
+    "m": KeyCode.M,
+    "n": KeyCode.N,
+    "o": KeyCode.KeyO,
+    "p": KeyCode.P,
+    "q": KeyCode.Q,
+    "r": KeyCode.R,
+    "s": KeyCode.S,
+    "t": KeyCode.T,
+    "u": KeyCode.U,
+    "v": KeyCode.V,
+    "w": KeyCode.W,
+    "x": KeyCode.X,
+    "y": KeyCode.Y,
+    "z": KeyCode.Z,
     # Numbers
-    '1': KeyCode.Num1, '2': KeyCode.Num2, '3': KeyCode.Num3,
-    '4': KeyCode.Num4, '5': KeyCode.Num5, '6': KeyCode.Num6,
-    '7': KeyCode.Num7, '8': KeyCode.Num8, '9': KeyCode.Num9,
-    '0': KeyCode.Num0,
+    "1": KeyCode.Num1,
+    "2": KeyCode.Num2,
+    "3": KeyCode.Num3,
+    "4": KeyCode.Num4,
+    "5": KeyCode.Num5,
+    "6": KeyCode.Num6,
+    "7": KeyCode.Num7,
+    "8": KeyCode.Num8,
+    "9": KeyCode.Num9,
+    "0": KeyCode.Num0,
     # Special keys
-    'return': KeyCode.Return, 'enter': KeyCode.Return,
-    'tab': KeyCode.Tab, 'space': KeyCode.Space,
-    'delete': KeyCode.Delete, 'backspace': KeyCode.Delete,
-    'forwarddelete': KeyCode.ForwardDelete,
-    'escape': KeyCode.Escape, 'esc': KeyCode.Escape,
+    "return": KeyCode.Return,
+    "enter": KeyCode.Return,
+    "tab": KeyCode.Tab,
+    "space": KeyCode.Space,
+    "delete": KeyCode.Delete,
+    "backspace": KeyCode.Delete,
+    "forwarddelete": KeyCode.ForwardDelete,
+    "escape": KeyCode.Escape,
+    "esc": KeyCode.Escape,
     # Modifiers
-    'command': KeyCode.Command, 'cmd': KeyCode.Command,
-    'shift': KeyCode.Shift, 'option': KeyCode.Option,
-    'alt': KeyCode.Option, 'control': KeyCode.Control,
-    'ctrl': KeyCode.Control, 'fn': KeyCode.Function,
-    'capslock': KeyCode.CapsLock,
+    "command": KeyCode.Command,
+    "cmd": KeyCode.Command,
+    "shift": KeyCode.Shift,
+    "option": KeyCode.Option,
+    "alt": KeyCode.Option,
+    "control": KeyCode.Control,
+    "ctrl": KeyCode.Control,
+    "fn": KeyCode.Function,
+    "capslock": KeyCode.CapsLock,
     # Arrow keys
-    'left': KeyCode.LeftArrow, 'right': KeyCode.RightArrow,
-    'up': KeyCode.UpArrow, 'down': KeyCode.DownArrow,
+    "left": KeyCode.LeftArrow,
+    "right": KeyCode.RightArrow,
+    "up": KeyCode.UpArrow,
+    "down": KeyCode.DownArrow,
     # Function keys
-    'f1': KeyCode.F1, 'f2': KeyCode.F2, 'f3': KeyCode.F3,
-    'f4': KeyCode.F4, 'f5': KeyCode.F5, 'f6': KeyCode.F6,
-    'f7': KeyCode.F7, 'f8': KeyCode.F8, 'f9': KeyCode.F9,
-    'f10': KeyCode.F10, 'f11': KeyCode.F11, 'f12': KeyCode.F12,
+    "f1": KeyCode.F1,
+    "f2": KeyCode.F2,
+    "f3": KeyCode.F3,
+    "f4": KeyCode.F4,
+    "f5": KeyCode.F5,
+    "f6": KeyCode.F6,
+    "f7": KeyCode.F7,
+    "f8": KeyCode.F8,
+    "f9": KeyCode.F9,
+    "f10": KeyCode.F10,
+    "f11": KeyCode.F11,
+    "f12": KeyCode.F12,
     # Navigation
-    'home': KeyCode.Home, 'end': KeyCode.End,
-    'pageup': KeyCode.PageUp, 'pagedown': KeyCode.PageDown,
+    "home": KeyCode.Home,
+    "end": KeyCode.End,
+    "pageup": KeyCode.PageUp,
+    "pagedown": KeyCode.PageDown,
     # Symbols
-    '=': KeyCode.Equal, '-': KeyCode.Minus,
-    '[': KeyCode.LeftBracket, ']': KeyCode.RightBracket,
-    "'": KeyCode.Quote, ';': KeyCode.Semicolon,
-    '\\': KeyCode.Backslash, ',': KeyCode.Comma,
-    '/': KeyCode.Slash, '.': KeyCode.Period,
-    '`': KeyCode.Grave,
+    "=": KeyCode.Equal,
+    "-": KeyCode.Minus,
+    "[": KeyCode.LeftBracket,
+    "]": KeyCode.RightBracket,
+    "'": KeyCode.Quote,
+    ";": KeyCode.Semicolon,
+    "\\": KeyCode.Backslash,
+    ",": KeyCode.Comma,
+    "/": KeyCode.Slash,
+    ".": KeyCode.Period,
+    "`": KeyCode.Grave,
     # Volume
-    'volumeup': KeyCode.VolumeUp, 'volumedown': KeyCode.VolumeDown,
-    'mute': KeyCode.Mute,
+    "volumeup": KeyCode.VolumeUp,
+    "volumedown": KeyCode.VolumeDown,
+    "mute": KeyCode.Mute,
 }
 
 
@@ -703,11 +788,13 @@ KEY_NAME_TO_CODE = {
 # CGEvent Types (Mouse)
 # =============================================================================
 
+
 class MouseEventType:
     """
     CGEvent types for mouse events.
     Used with CGEventCreateMouseEvent.
     """
+
     LeftMouseDown = 1
     LeftMouseUp = 2
     RightMouseDown = 3
@@ -723,6 +810,7 @@ class MouseEventType:
 
 class MouseButton:
     """Mouse button identifiers for CGEvent."""
+
     Left = 0
     Right = 1
     Center = 2
@@ -732,11 +820,13 @@ class MouseButton:
 # CGEvent Flags (Modifier keys)
 # =============================================================================
 
+
 class EventFlag:
     """
     CGEvent flags for modifier keys.
     Used with CGEventSetFlags.
     """
+
     MaskAlphaShift = 0x00010000
     MaskShift = 0x00020000
     MaskControl = 0x00040000
@@ -749,14 +839,14 @@ class EventFlag:
 
 # Modifier key mapping for shortcut parsing
 MODIFIER_KEY_MAP = {
-    'command': EventFlag.MaskCommand,
-    'cmd': EventFlag.MaskCommand,
-    'shift': EventFlag.MaskShift,
-    'option': EventFlag.MaskAlternate,
-    'alt': EventFlag.MaskAlternate,
-    'control': EventFlag.MaskControl,
-    'ctrl': EventFlag.MaskControl,
-    'fn': EventFlag.MaskSecondaryFn,
+    "command": EventFlag.MaskCommand,
+    "cmd": EventFlag.MaskCommand,
+    "shift": EventFlag.MaskShift,
+    "option": EventFlag.MaskAlternate,
+    "alt": EventFlag.MaskAlternate,
+    "control": EventFlag.MaskControl,
+    "ctrl": EventFlag.MaskControl,
+    "fn": EventFlag.MaskSecondaryFn,
 }
 
 
@@ -764,43 +854,50 @@ MODIFIER_KEY_MAP = {
 # Orientation
 # =============================================================================
 
+
 class Orientation:
     """Orientation values for scroll bars and other oriented elements."""
-    Horizontal = 'AXHorizontalOrientation'
-    Vertical = 'AXVerticalOrientation'
-    Unknown = 'AXUnknownOrientation'
+
+    Horizontal = "AXHorizontalOrientation"
+    Vertical = "AXVerticalOrientation"
+    Unknown = "AXUnknownOrientation"
 
 
 # =============================================================================
 # Sort Direction
 # =============================================================================
 
+
 class SortDirection:
     """Sort direction values for table columns."""
-    Ascending = 'AXAscendingSortDirection'
-    Descending = 'AXDescendingSortDirection'
-    Unknown = 'AXUnknownSortDirection'
+
+    Ascending = "AXAscendingSortDirection"
+    Descending = "AXDescendingSortDirection"
+    Unknown = "AXUnknownSortDirection"
 
 
 # =============================================================================
 # Units
 # =============================================================================
 
+
 class Units:
     """Units for text ranges and other measurements."""
-    Points = 'AXPointsUnit'
-    Characters = 'AXCharactersUnit'
-    Words = 'AXWordsUnit'
-    Lines = 'AXLinesUnit'
-    Sentences = 'AXSentencesUnit'
-    Paragraphs = 'AXParagraphsUnit'
-    Pages = 'AXPagesUnit'
-    Document = 'AXDocumentUnit'
+
+    Points = "AXPointsUnit"
+    Characters = "AXCharactersUnit"
+    Words = "AXWordsUnit"
+    Lines = "AXLinesUnit"
+    Sentences = "AXSentencesUnit"
+    Paragraphs = "AXParagraphsUnit"
+    Pages = "AXPagesUnit"
+    Document = "AXDocumentUnit"
 
 
 # =============================================================================
 # AXValue Types
 # =============================================================================
+
 
 class AXValueType:
     """
@@ -808,17 +905,19 @@ class AXValueType:
     Used with AXValueCreate and AXValueGetValue.
     Refer: HIServices/AXValue.h
     """
-    CGPoint = 1   # kAXValueCGPointType
-    CGSize = 2    # kAXValueCGSizeType
-    CGRect = 3    # kAXValueCGRectType
-    CFRange = 4   # kAXValueCFRangeType
-    AXError = 5   # kAXValueAXErrorType
-    Illegal = 0   # kAXValueIllegalType
+
+    CGPoint = 1  # kAXValueCGPointType
+    CGSize = 2  # kAXValueCGSizeType
+    CGRect = 3  # kAXValueCGRectType
+    CFRange = 4  # kAXValueCFRangeType
+    AXError = 5  # kAXValueAXErrorType
+    Illegal = 0  # kAXValueIllegalType
 
 
 # =============================================================================
 # Text Attributed String Keys
 # =============================================================================
+
 
 class TextAttribute:
     """
@@ -826,54 +925,57 @@ class TextAttribute:
     Used with parameterized attributes like AXAttributedStringForRange.
     Refer: HIServices/AXTextAttributedString.h
     """
+
     # Font attributes
-    Font = 'AXFontText'
-    FontFamily = 'AXFontFamily'
-    FontName = 'AXFontName'
-    FontSize = 'AXFontSize'
-    VisibleName = 'AXVisibleName'
+    Font = "AXFontText"
+    FontFamily = "AXFontFamily"
+    FontName = "AXFontName"
+    FontSize = "AXFontSize"
+    VisibleName = "AXVisibleName"
 
     # Color attributes
-    ForegroundColor = 'AXForegroundColorText'
-    BackgroundColor = 'AXBackgroundColorText'
-    UnderlineColor = 'AXUnderlineColorText'
-    StrikethroughColor = 'AXStrikethroughColorText'
+    ForegroundColor = "AXForegroundColorText"
+    BackgroundColor = "AXBackgroundColorText"
+    UnderlineColor = "AXUnderlineColorText"
+    StrikethroughColor = "AXStrikethroughColorText"
 
     # Style attributes
-    Underline = 'AXUnderlineText'
-    Strikethrough = 'AXStrikethroughText'
-    Shadow = 'AXShadowText'
-    Superscript = 'AXSuperscriptText'
+    Underline = "AXUnderlineText"
+    Strikethrough = "AXStrikethroughText"
+    Shadow = "AXShadowText"
+    Superscript = "AXSuperscriptText"
 
     # Content attributes
-    Attachment = 'AXAttachmentText'
-    Link = 'AXLinkText'
-    NaturalLanguage = 'AXNaturalLanguageText'
-    ReplacementString = 'AXReplacementStringText'
+    Attachment = "AXAttachmentText"
+    Link = "AXLinkText"
+    NaturalLanguage = "AXNaturalLanguageText"
+    ReplacementString = "AXReplacementStringText"
 
     # Spell-check attributes
-    Misspelled = 'AXMisspelledText'
-    MarkedMisspelled = 'AXMarkedMisspelledText'
-    Autocorrected = 'AXAutocorrectedText'
+    Misspelled = "AXMisspelledText"
+    MarkedMisspelled = "AXMarkedMisspelledText"
+    Autocorrected = "AXAutocorrectedText"
 
 
 # =============================================================================
 # Activation Policy
 # =============================================================================
 
+
 class ActivationPolicy:
     """
     Application activation policies from NSApplicationActivationPolicy.
     Determines how an application appears in the Dock and App Switcher.
     """
-    Regular = 0       # Appears in Dock and App Switcher (normal apps)
-    Accessory = 1     # Does not appear in Dock, may appear in App Switcher
-    Prohibited = 2    # Does not appear in Dock or App Switcher (background agents)
+
+    Regular = 0  # Appears in Dock and App Switcher (normal apps)
+    Accessory = 1  # Does not appear in Dock, may appear in App Switcher
+    Prohibited = 2  # Does not appear in Dock or App Switcher (background agents)
 
 
 # Reverse lookup: int → human-readable name
 ActivationPolicyNames = {
-    0: 'Regular',
-    1: 'Accessory',
-    2: 'Prohibited',
+    0: "Regular",
+    1: "Accessory",
+    2: "Prohibited",
 }

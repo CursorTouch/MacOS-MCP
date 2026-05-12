@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Global registry for EventObserver instances (needed for callback routing)
-_observer_registry: dict[int, 'EventObserver'] = {}
+_observer_registry: dict[int, "EventObserver"] = {}
 
 
 @objc.callbackFor(AXObserverCreate)
@@ -66,6 +66,7 @@ def _global_observer_callback(observer, element, notification, refcon):
 # AppObserver - Per-Application Observer
 # =============================================================================
 
+
 class AppObserver:
     """
     Observer for a single application's accessibility events.
@@ -74,7 +75,7 @@ class AppObserver:
     Equivalent to the per-process observer in Windows UIA.
     """
 
-    def __init__(self, pid: int, parent: 'EventObserver'):
+    def __init__(self, pid: int, parent: "EventObserver"):
         self.pid = pid
         self.parent = parent
         self.observer = None
@@ -98,9 +99,7 @@ class AppObserver:
                 return False
 
             error, self.observer = AXObserverCreate(
-                self.pid,
-                _global_observer_callback,
-                None
+                self.pid, _global_observer_callback, None
             )
             if error != kAXErrorSuccess or not self.observer:
                 return False
@@ -115,10 +114,7 @@ class AppObserver:
             for notification in notifications:
                 try:
                     error = AXObserverAddNotification(
-                        self.observer,
-                        self.ax_app,
-                        notification,
-                        self.pid
+                        self.observer, self.ax_app, notification, self.pid
                     )
                     if error == kAXErrorSuccess:
                         self.registered_notifications.add(str(notification))
@@ -138,9 +134,7 @@ class AppObserver:
                 for notif_str in list(self.registered_notifications):
                     try:
                         AXObserverRemoveNotification(
-                            self.observer,
-                            self.ax_app,
-                            notif_str
+                            self.observer, self.ax_app, notif_str
                         )
                     except Exception:
                         pass
@@ -151,7 +145,7 @@ class AppObserver:
                     CFRunLoopRemoveSource(
                         CFRunLoopGetCurrent(),
                         self.run_loop_source,
-                        kCFRunLoopDefaultMode
+                        kCFRunLoopDefaultMode,
                     )
                 except Exception:
                     pass
@@ -171,6 +165,7 @@ class AppObserver:
 # =============================================================================
 # EventObserver - Main Event Observation Service
 # =============================================================================
+
 
 class EventObserver:
     """
@@ -302,36 +297,42 @@ class EventObserver:
         notifications = []
 
         if self.on_focus_changed:
-            notifications.extend([
-                Notification.FocusedUIElementChanged,
-                Notification.FocusedWindowChanged,
-                Notification.MainWindowChanged,
-            ])
+            notifications.extend(
+                [
+                    Notification.FocusedUIElementChanged,
+                    Notification.FocusedWindowChanged,
+                    Notification.MainWindowChanged,
+                ]
+            )
 
         if self.on_structure_changed:
-            notifications.extend([
-                Notification.Created,
-                Notification.UIElementDestroyed,
-                Notification.WindowCreated,
-                Notification.MenuOpened,
-                Notification.MenuClosed,
-                Notification.RowCountChanged,
-            ])
+            notifications.extend(
+                [
+                    Notification.Created,
+                    Notification.UIElementDestroyed,
+                    Notification.WindowCreated,
+                    Notification.MenuOpened,
+                    Notification.MenuClosed,
+                    Notification.RowCountChanged,
+                ]
+            )
 
         if self.on_property_changed:
-            notifications.extend([
-                Notification.ValueChanged,
-                Notification.TitleChanged,
-                Notification.SelectedTextChanged,
-                Notification.SelectedChildrenChanged,
-                Notification.SelectedChildrenMoved,
-                Notification.SelectedRowsChanged,
-                Notification.SelectedColumnsChanged,
-                Notification.SelectedCellsChanged,
-                Notification.UnitsChanged,
-                Notification.Moved,
-                Notification.Resized,
-            ])
+            notifications.extend(
+                [
+                    Notification.ValueChanged,
+                    Notification.TitleChanged,
+                    Notification.SelectedTextChanged,
+                    Notification.SelectedChildrenChanged,
+                    Notification.SelectedChildrenMoved,
+                    Notification.SelectedRowsChanged,
+                    Notification.SelectedColumnsChanged,
+                    Notification.SelectedCellsChanged,
+                    Notification.UnitsChanged,
+                    Notification.Moved,
+                    Notification.Resized,
+                ]
+            )
 
         return notifications
 

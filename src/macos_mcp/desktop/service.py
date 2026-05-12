@@ -15,6 +15,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
+
 class Desktop:
     def __init__(self):
         self.tree = Tree()
@@ -31,17 +32,17 @@ class Desktop:
         as_bytes: bool = False,
         scale: float = 1.0,
     ):
-        windows=self.get_windows()
-        active_window=self.get_foreground_window()
-        tree_state=self.tree.get_state(active_window=active_window)
+        windows = self.get_windows()
+        active_window = self.get_foreground_window()
+        tree_state = self.tree.get_state(active_window=active_window)
         if use_vision:
-            screenshot=self.get_annotated_screenshot(
+            screenshot = self.get_annotated_screenshot(
                 nodes=tree_state.interactive_nodes,
                 as_bytes=as_bytes,
                 scale=scale,
             )
         else:
-            screenshot=None
+            screenshot = None
         return DesktopState(
             active_window=active_window,
             windows=windows,
@@ -51,26 +52,28 @@ class Desktop:
 
     def app(
         self,
-        mode: Literal['launch', 'resize', 'move', 'switch'] = 'launch',
+        mode: Literal["launch", "resize", "move", "switch"] = "launch",
         name: Optional[str] = None,
         window_loc: Optional[Tuple[int, int]] = None,
         window_size: Optional[Tuple[int, int]] = None,
     ) -> str:
         """Manage applications: launch, resize, move, or switch focus."""
-        if mode == 'launch':
+        if mode == "launch":
             if not name:
                 return "App name or bundle ID required for launch."
             ok = ax.LaunchApplication(name)
             return f"Launched {name}." if ok else f"Failed to launch {name}."
-        if mode == 'switch':
+        if mode == "switch":
             if not name:
                 return "App name or bundle ID required for switch."
-            app = ax.GetRunningApplicationByName(name) or ax.GetRunningApplicationByBundleId(name)
+            app = ax.GetRunningApplicationByName(
+                name
+            ) or ax.GetRunningApplicationByBundleId(name)
             if not app:
                 return f"Application '{name}' not found."
             ax.ActivateApplication(app.PID)
             return f"Switched to {name}."
-        if mode == 'resize':
+        if mode == "resize":
             app = ax.GetFrontmostApplication()
             if not app or not app.MainWindow:
                 return "No frontmost window to resize."
@@ -79,7 +82,7 @@ class Desktop:
                 return "window_size required for resize mode."
             win.Resize(float(window_size[0]), float(window_size[1]))
             return "Window resized."
-        if mode == 'move':
+        if mode == "move":
             app = ax.GetFrontmostApplication()
             if not app or not app.MainWindow:
                 return "No frontmost window to move."
@@ -93,7 +96,7 @@ class Desktop:
     def execute_command(
         self,
         command: str,
-        mode: Literal['shell', 'osascript'] = 'shell',
+        mode: Literal["shell", "osascript"] = "shell",
         timeout: int = 10,
     ) -> Tuple[str, int]:
         """Execute a shell or AppleScript command."""
@@ -108,12 +111,17 @@ class Desktop:
     ) -> str:
         """Send a macOS notification banner."""
         import subprocess
-        script = f'display notification {json.dumps(message)} with title {json.dumps(title)}'
+
+        script = (
+            f"display notification {json.dumps(message)} with title {json.dumps(title)}"
+        )
         if subtitle:
-            script += f' subtitle {json.dumps(subtitle)}'
+            script += f" subtitle {json.dumps(subtitle)}"
         if sound:
-            script += f' sound name {json.dumps(sound)}'
-        result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+            script += f" sound name {json.dumps(sound)}"
+        result = subprocess.run(
+            ["osascript", "-e", script], capture_output=True, text=True
+        )
         if result.returncode == 0:
             return f"Notification sent: [{title}] {message}"
         return f"Failed to send notification: {result.stderr.strip()}"
@@ -121,7 +129,7 @@ class Desktop:
     def click(
         self,
         loc: Tuple[int, int],
-        button: Literal['left', 'right', 'middle'] = 'left',
+        button: Literal["left", "right", "middle"] = "left",
         clicks: int = 1,
     ) -> None:
         """Perform mouse click at coordinates."""
@@ -129,21 +137,21 @@ class Desktop:
         if clicks == 0:
             ax.MoveTo(x, y)
             return
-        if button == 'left':
+        if button == "left":
             if clicks == 2:
                 ax.DoubleClick(x, y)
             else:
                 ax.Click(x, y)
-        elif button == 'right':
+        elif button == "right":
             ax.RightClick(x, y)
-        elif button == 'middle':
+        elif button == "middle":
             ax.MiddleClick(x, y)
 
     def type(
         self,
         loc: Tuple[int, int],
         text: str,
-        caret_position: Literal['start', 'idle', 'end'] = 'idle',
+        caret_position: Literal["start", "idle", "end"] = "idle",
         clear: bool = False,
         press_enter: bool = False,
     ) -> None:
@@ -153,15 +161,15 @@ class Desktop:
         ax.Click(x, y)
         time.sleep(0.1)
         if clear:
-            ax.HotKey('command', 'a')
+            ax.HotKey("command", "a")
             time.sleep(0.05)
-            ax.HotKey('delete')
+            ax.HotKey("delete")
             time.sleep(0.05)
-        if caret_position == 'start':
-            ax.HotKey('command', 'left')
+        if caret_position == "start":
+            ax.HotKey("command", "left")
             time.sleep(0.02)
-        elif caret_position == 'end':
-            ax.HotKey('command', 'right')
+        elif caret_position == "end":
+            ax.HotKey("command", "right")
             time.sleep(0.02)
         ax.TypeText(text)
         if press_enter:
@@ -170,23 +178,23 @@ class Desktop:
     def scroll(
         self,
         loc: Optional[Tuple[int, int]],
-        scroll_type: Literal['horizontal', 'vertical'],
-        direction: Literal['up', 'down', 'left', 'right'],
+        scroll_type: Literal["horizontal", "vertical"],
+        direction: Literal["up", "down", "left", "right"],
         wheel_times: int = 1,
     ) -> Optional[str]:
         """Scroll at coordinates or current mouse position."""
         if loc:
             ax.MoveTo(loc[0], loc[1])
             time.sleep(0.05)
-        mult = 1 if direction in ('down', 'right') else -1
+        mult = 1 if direction in ("down", "right") else -1
         for _ in range(wheel_times):
-            if scroll_type == 'vertical':
-                if direction in ('up', 'down'):
+            if scroll_type == "vertical":
+                if direction in ("up", "down"):
                     ax.WheelUp(1) if mult < 0 else ax.WheelDown(1)
                 else:
                     return "Use direction 'up' or 'down' for vertical scroll."
             else:
-                if direction in ('left', 'right'):
+                if direction in ("left", "right"):
                     ax.WheelLeft(1) if mult < 0 else ax.WheelRight(1)
                 else:
                     return "Use direction 'left' or 'right' for horizontal scroll."
@@ -204,14 +212,14 @@ class Desktop:
 
     def shortcut(self, shortcut: str) -> None:
         """Execute keyboard shortcut (e.g. 'command+c')."""
-        keys = [k.strip().lower() for k in shortcut.split('+')]
+        keys = [k.strip().lower() for k in shortcut.split("+")]
         ax.HotKey(*keys)
 
     def scrape(self, url: str) -> str:
         """Fetch URL content as text."""
         try:
             headers = {
-                'User-Agent': 'macOS-MCP/0.3.1 (macOS Desktop Automation MCP Server)'
+                "User-Agent": "macOS-MCP/0.3.1 (macOS Desktop Automation MCP Server)"
             }
             r = requests.get(url, timeout=10, headers=headers)
             r.raise_for_status()
@@ -224,16 +232,16 @@ class Desktop:
         time.sleep(duration)
 
     def get_foreground_window(self) -> Optional[Window]:
-        app=ax.GetFrontmostApplication()
+        app = ax.GetFrontmostApplication()
         if app is None:
             return None
-        window=app.MainWindow
+        window = app.MainWindow
         if window is None:
             return None
         is_browser = app.BundleIdentifier in BROWSER_BUNDLE_IDS
-        rect=window.BoundingRectangle
+        rect = window.BoundingRectangle
         if rect:
-            bounding_box=BoundingBox(
+            bounding_box = BoundingBox(
                 left=int(rect.left),
                 top=int(rect.top),
                 right=int(rect.right),
@@ -242,7 +250,9 @@ class Desktop:
                 height=int(rect.height),
             )
         else:
-            bounding_box=BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
+            bounding_box = BoundingBox(
+                left=0, top=0, right=0, bottom=0, width=0, height=0
+            )
         status_str = app.Status
         try:
             status = Status(status_str)
@@ -266,15 +276,15 @@ class Desktop:
             windows — list of Window objects
         """
         # Get all regular (Dock-visible) applications
-        apps = ax.GetRunningApplications(policy='Regular')
+        apps = ax.GetRunningApplications(policy="Regular")
 
         windows = []
         for app in apps:
-            bundle_id = app.BundleIdentifier or ''
+            bundle_id = app.BundleIdentifier or ""
             if bundle_id in EXCLUDED_BUNDLE_IDS:
                 continue
 
-            app_name = app.Name or ''
+            app_name = app.Name or ""
             pid = app.PID
             is_browser = bundle_id in BROWSER_BUNDLE_IDS
 
@@ -302,18 +312,24 @@ class Desktop:
                             height=int(rect.height),
                         )
                     else:
-                        bbox = BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
+                        bbox = BoundingBox(
+                            left=0, top=0, right=0, bottom=0, width=0, height=0
+                        )
                 else:
-                    bbox = BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
+                    bbox = BoundingBox(
+                        left=0, top=0, right=0, bottom=0, width=0, height=0
+                    )
 
-            windows.append(Window(
-                name=app_name,
-                is_browser=is_browser,
-                status=status,
-                bounding_box=bbox,
-                pid=pid,
-                bundle_id=bundle_id,
-            ))
+            windows.append(
+                Window(
+                    name=app_name,
+                    is_browser=is_browser,
+                    status=status,
+                    bounding_box=bbox,
+                    pid=pid,
+                    bundle_id=bundle_id,
+                )
+            )
 
         return windows
 
@@ -356,7 +372,9 @@ class Desktop:
         """
         img = self.get_screenshot()
         if img is None:
-            logger.warning("Screenshot capture failed. Grant Screen Recording permission in System Settings > Privacy & Security.")
+            logger.warning(
+                "Screenshot capture failed. Grant Screen Recording permission in System Settings > Privacy & Security."
+            )
             return None
         padding = 5
         width = int(img.width + 1.5 * padding)
@@ -373,31 +391,39 @@ class Desktop:
         display_infos = ax.GetPerDisplayInfo()
         pixel_left_acc = 0
         for d in display_infos:
-            d['pixel_left'] = pixel_left_acc
-            pixel_left_acc += d['pixel_width']
+            d["pixel_left"] = pixel_left_acc
+            pixel_left_acc += d["pixel_width"]
 
-        virtual_left = display_infos[0]['logical_left'] if display_infos else 0
-        virtual_top = min(d['logical_top'] for d in display_infos) if display_infos else 0
+        virtual_left = display_infos[0]["logical_left"] if display_infos else 0
+        virtual_top = (
+            min(d["logical_top"] for d in display_infos) if display_infos else 0
+        )
 
         def _find_display(lx: float, ly: float) -> Optional[dict]:
             for d in display_infos:
-                if (d['logical_left'] <= lx < d['logical_left'] + d['logical_width'] and
-                        d['logical_top'] <= ly < d['logical_top'] + d['logical_height']):
+                if (
+                    d["logical_left"] <= lx < d["logical_left"] + d["logical_width"]
+                    and d["logical_top"] <= ly < d["logical_top"] + d["logical_height"]
+                ):
                     return d
             return None
 
         def _logical_to_pixel(lx: float, ly: float) -> tuple[int, int]:
             d = _find_display(lx, ly)
             if d:
-                px = d['pixel_left'] + int((lx - d['logical_left']) * d['scale'])
-                py = int((ly - d['logical_top']) * d['scale'])
+                px = d["pixel_left"] + int((lx - d["logical_left"]) * d["scale"])
+                py = int((ly - d["logical_top"]) * d["scale"])
                 return px, py
             # Fallback: use average scale across all displays
-            avg_scale = img.width / max(sum(d['logical_width'] for d in display_infos), 1)
-            return int((lx - virtual_left) * avg_scale), int((ly - virtual_top) * avg_scale)
+            avg_scale = img.width / max(
+                sum(d["logical_width"] for d in display_infos), 1
+            )
+            return int((lx - virtual_left) * avg_scale), int(
+                (ly - virtual_top) * avg_scale
+            )
 
         # Font sized to main display scale
-        dpi_scale = display_infos[0]['scale'] if display_infos else ax.GetDPIScale()
+        dpi_scale = display_infos[0]["scale"] if display_infos else ax.GetDPIScale()
         font_size = max(12, int(14 * dpi_scale))
         try:
             font_path = "/System/Library/Fonts/Helvetica.ttc"
@@ -423,10 +449,10 @@ class Desktop:
             cy = (box.top + box.bottom) / 2
             d = _find_display(cx, cy)
             if d:
-                s = d['scale']
-                pl = d['pixel_left']
-                dl = d['logical_left']
-                dt = d['logical_top']
+                s = d["scale"]
+                pl = d["pixel_left"]
+                dl = d["logical_left"]
+                dt = d["logical_top"]
                 x1 = pl + int((box.left - dl) * s) + padding
                 y1 = int((box.top - dt) * s) + padding
                 x2 = pl + int((box.right - dl) * s) + padding
@@ -434,8 +460,10 @@ class Desktop:
             else:
                 x1, y1 = _logical_to_pixel(box.left, box.top)
                 x2, y2 = _logical_to_pixel(box.right, box.bottom)
-                x1 += padding; y1 += padding
-                x2 += padding; y2 += padding
+                x1 += padding
+                y1 += padding
+                x2 += padding
+                y2 += padding
 
             # Deterministic color per label
             random.seed(label)
@@ -463,7 +491,9 @@ class Desktop:
             tag_y2 = tag_y1 + text_h + 4
 
             draw.rectangle([tag_x1, tag_y1, tag_x2, tag_y2], fill=color)
-            draw.text((tag_x1 + 2, tag_y1 + 2), label_text, font=font, fill=(255, 255, 255))
+            draw.text(
+                (tag_x1 + 2, tag_y1 + 2), label_text, font=font, fill=(255, 255, 255)
+            )
 
         for i, node in enumerate(nodes):
             draw_annotation(i, node)
