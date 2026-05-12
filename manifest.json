@@ -1,7 +1,7 @@
 {
-  "manifest_version": "0.2",
+  "manifest_version": "0.4",
   "name": "MacOS-MCP",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "description": "Lightweight MCP Server for macOS desktop interaction",
   "long_description": "MacOS-MCP is a lightweight, open-source MCP server that bridges AI agents with the macOS operating system. It enables LLM agents to perform real-world tasks such as app launching, window management, UI interaction, browser automation, desktop state capture, and shell execution using native macOS accessibility and automation APIs.\n\n**KEY FEATURES**\n- **Native macOS Integration**: Interact with applications, windows, and UI elements through the macOS Accessibility API and Quartz event system.\n- **Bring Your Own LLM/VLM**: Works with any language model and optionally provides visual snapshots when needed.\n- **Rich Toolset for Desktop Automation**: Pre-built tools for application control, mouse and keyboard input, scrolling, shell commands, and desktop state capture.\n- **Lightweight and Open Source**: Minimal setup with a focused Python package and MIT license.\n\n**MINIMUM REQUIREMENTS**\n- Python 3.11 or higher\n- macOS 12 or higher\n- Accessibility permissions granted to the terminal or application running the MCP server\n- UV Package Manager\nThis MCP server uses UV for running the package in a managed Python environment.\nInstallation:\n`curl -LsSf https://astral.sh/uv/install.sh | sh`\nFor detailed installation instructions, [see the UV documentation](https://docs.astral.sh/uv/)",
   "author": {
@@ -27,43 +27,47 @@
   "tools": [
     {
       "name": "App",
-      "description": "Manage macOS applications by launching, switching focus, or resizing and moving the active window."
+      "description": "Manages macOS applications with four modes: 'launch' (opens the application), 'resize' (adjusts active window size), 'move' (repositions active window), 'switch' (brings specific app into focus)."
     },
     {
       "name": "Shell",
-      "description": "Execute shell commands or AppleScript on macOS for system operations and automation."
+      "description": "Execute commands on macOS. Modes: 'shell' (default) for bash/zsh commands, 'osascript' for AppleScript. Use for file system, process management, system operations, and automation scripts."
     },
     {
       "name": "Snapshot",
-      "description": "Capture desktop state including the focused window, open applications, interactive elements, scrollable regions, and an optional annotated screenshot."
+      "description": "Captures complete desktop state including: focused window, open applications, interactive elements (buttons, text fields, links, menus with coordinates), and scrollable areas. Set use_vision=True to include screenshot with numbered annotations on interactive elements."
     },
     {
       "name": "Click",
-      "description": "Perform hover, single-click, or double-click actions at a screen coordinate using left, right, or middle mouse buttons."
+      "description": "Performs mouse clicks at specified coordinates [x, y]. Supports button types: 'left' for selection/activation, 'right' for context menus, 'middle'. Supports clicks: 0=hover only, 1=single click, 2=double click."
     },
     {
       "name": "Type",
-      "description": "Type text at a screen coordinate, optionally clearing existing content and pressing Enter after input."
+      "description": "Types text at specified coordinates [x, y]. Set clear=True to clear existing text first. Set press_enter=True to submit after typing. Set caret_position to 'start', 'end', or 'idle' (default)."
     },
     {
       "name": "Scroll",
-      "description": "Scroll vertically or horizontally at a coordinate or the current mouse position."
+      "description": "Scrolls at coordinates [x, y] or current mouse position if loc=None. Type: vertical (default) or horizontal. Direction: up/down for vertical, left/right for horizontal. wheel_times controls scroll amount."
     },
     {
       "name": "Move",
-      "description": "Move the mouse pointer to a coordinate or drag from the current position to a target coordinate."
+      "description": "Moves mouse cursor to coordinates [x, y]. Set drag=True to perform a drag-and-drop operation from current position to target coordinates."
     },
     {
       "name": "Shortcut",
-      "description": "Execute macOS keyboard shortcuts such as command+c, command+v, command+tab, or command+space."
+      "description": "Executes keyboard shortcuts using key combinations separated by +. Examples: 'command+c' (copy), 'command+v' (paste), 'command+tab' (switch apps), 'command+space' (Spotlight). Note: Use 'command' instead of 'ctrl' on macOS."
     },
     {
       "name": "Wait",
-      "description": "Pause execution for a specified number of seconds."
+      "description": "Pauses execution for specified duration in seconds. Use when waiting for: applications to launch, UI animations to complete, content to load. Helps ensure UI is ready before next interaction."
     },
     {
       "name": "Scrape",
-      "description": "Fetch the contents of a URL and return the response body as text."
+      "description": "Fetch content from a URL. Performs a lightweight HTTP request and returns the page content as text."
+    },
+    {
+      "name": "Notification",
+      "description": "Sends a macOS notification banner with a message, title, optional subtitle, and optional sound. Supported sounds: Glass, Ping, Basso, Tink, Funk, Bottle, Frog, Hero, Morse, Pop, Purr, Sosumi, Submarine."
     }
   ],
   "compatibility": {
