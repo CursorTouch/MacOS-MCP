@@ -83,6 +83,7 @@ from ApplicationServices import (
     AXUIElementSetMessagingTimeout,
     AXIsProcessTrusted,
     AXIsProcessTrustedWithOptions,
+    AXValueCreate,
     AXValueGetType,
     kAXErrorSuccess,
     kAXCopyMultipleAttributeOptionStopOnError,
@@ -298,9 +299,18 @@ def SetAttribute(element: Any, attribute: str, value: Any) -> bool:
     Returns True if successful.
     """
     try:
-        error = AXUIElementSetAttributeValue(element, attribute, value)
+        wrapped_value = value
+        if attribute == Attribute.Position and isinstance(value, (tuple, list)):
+            from Quartz import CGPointMake
+            wrapped_value = AXValueCreate(AXValueType.CGPoint, CGPointMake(float(value[0]), float(value[1])))
+        elif attribute == Attribute.Size and isinstance(value, (tuple, list)):
+            from Quartz import CGSizeMake
+            wrapped_value = AXValueCreate(AXValueType.CGSize, CGSizeMake(float(value[0]), float(value[1])))
+
+        error = AXUIElementSetAttributeValue(element, attribute, wrapped_value)
         return error == kAXErrorSuccess
-    except Exception:
+    except Exception as e:
+        logger.debug(f"SetAttribute error: {e}")
         return False
 
 
