@@ -461,6 +461,7 @@ def GetRect(element: Any) -> Optional[Rect]:
 
 # Phase-1 attributes fetched for every element: minimal set needed to decide
 # whether an element is interactive and to traverse its children.
+# TitleUIElement is included here because its presence is itself an interactivity signal.
 _EARLY_TRAVERSAL_ATTRIBUTES = [
     Attribute.Role,
     Attribute.Hidden,
@@ -469,6 +470,7 @@ _EARLY_TRAVERSAL_ATTRIBUTES = [
     Attribute.Enabled,
     Attribute.Help,
     Attribute.HasPopup,
+    Attribute.TitleUIElement,
     Attribute.Children,
 ]
 
@@ -483,7 +485,6 @@ _LATE_TRAVERSAL_ATTRIBUTES = [
     Attribute.PlaceholderValue,
     Attribute.URL,
     Attribute.Expanded,
-    Attribute.TitleUIElement,
 ]
 
 # Combined list kept for callers that still need a single full batch (e.g. _dom_correction).
@@ -505,6 +506,7 @@ def GetEarlyTraversalBatch(element: Any) -> dict:
         'enabled': raw.get(Attribute.Enabled) is not False,
         'help': raw.get(Attribute.Help) or '',
         'has_popup': raw.get(Attribute.HasPopup) is True,
+        'title_ui_element': raw.get(Attribute.TitleUIElement),
         'rect': rect,
         'children': raw.get(Attribute.Children) or [],
     }
@@ -514,6 +516,7 @@ def GetLateTraversalBatch(element: Any) -> dict:
     """
     Phase-2 batch: fetch display/metadata attributes for elements already identified
     as interactive.  Only called for the small minority of interactive elements.
+    TitleUIElement resolution is handled by the caller using the ref from the early batch.
     """
     raw = GetMultipleAttributeValues(element, _LATE_TRAVERSAL_ATTRIBUTES)
     title = raw.get(Attribute.Title) or ''
@@ -533,7 +536,6 @@ def GetLateTraversalBatch(element: Any) -> dict:
         'placeholder': str(placeholder) if placeholder is not None else None,
         'url': str(url) if url is not None else None,
         'expanded': raw.get(Attribute.Expanded) is True,
-        'title_ui_element': raw.get(Attribute.TitleUIElement),
         'label': label,
     }
 

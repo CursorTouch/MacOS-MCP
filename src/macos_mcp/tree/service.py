@@ -276,7 +276,8 @@ class Tree:
 
             is_visible = (rect.width > 1 and rect.height > 1)
             has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
-            is_interactive = ((has_roles and early['enabled']) or bool(early['help']) or early['has_popup']) and is_visible
+            has_title_ui_element = bool(early['title_ui_element'])
+            is_interactive = ((has_roles and early['enabled']) or bool(early['help']) or early['has_popup'] or has_title_ui_element) and is_visible
 
             bounding_box = BoundingBox.from_bounding_rectangle(rect)
             if main_window_bounding_box:
@@ -287,7 +288,23 @@ class Tree:
             if is_interactive:
                 # --- Phase 2: display/metadata attributes, only for interactive elements ---
                 late = ax.GetLateTraversalBatch(element)
-                attrs = {**early, **late}
+
+                # Resolve TitleUIElement ref (fetched in phase 1) to its display text.
+                title_ui_element_text = None
+                if early['title_ui_element'] is not None:
+                    ref_raw = ax.GetMultipleAttributeValues(
+                        early['title_ui_element'],
+                        [ax.Attribute.Title, ax.Attribute.Value, ax.Attribute.Description],
+                    )
+                    title_ui_element_text = (
+                        ref_raw.get(ax.Attribute.Title)
+                        or ref_raw.get(ax.Attribute.Value)
+                        or ref_raw.get(ax.Attribute.Description)
+                        or None
+                    )
+
+                label = late['label'] or (str(title_ui_element_text) if title_ui_element_text else '')
+                attrs = {**early, **late, 'title_ui_element': title_ui_element_text}
 
                 center = bounding_box.get_center()
                 metadata = {}
@@ -313,8 +330,8 @@ class Tree:
                         metadata['selected'] = value
 
                 elif role == "AXPopUpButton":
-                    if title := late['title_ui_element']:
-                        metadata['title'] = title
+                    if title_ui_element_text:
+                        metadata['title'] = title_ui_element_text
 
                 elif role == "AXLink":
                     if url := late['url']:
@@ -327,7 +344,7 @@ class Tree:
                     TreeElementNode(
                         bounding_box=bounding_box,
                         center=center,
-                        name=late['label'],
+                        name=label,
                         control_type=role,
                         window_name=window_name,
                         metadata=metadata,
