@@ -10,7 +10,7 @@ from pathlib import Path
 @dataclass
 class ServerConfig:
     transport: str = "stdio"
-    host: str = "127.0.0.1"
+    host: str = "localhost"
     port: int = 8000
     allow_insecure_remote: bool = False
     auth_key: str | None = None
