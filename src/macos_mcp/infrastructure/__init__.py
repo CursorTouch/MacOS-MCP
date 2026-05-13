@@ -12,8 +12,11 @@ from macos_mcp.infrastructure.config import (
     ServerConfig,
     SecurityConfig,
     ToolsConfig,
+    CONFIG_DIR,
+    CONFIG_FILE,
     discover_config_path,
     load_config,
+    write_config,
 )
 from macos_mcp.infrastructure.oauth import OAuthStore, build_oauth_routes, validate_oauth_token
 
@@ -31,8 +34,11 @@ __all__ = [
     "ServerConfig",
     "SecurityConfig",
     "ToolsConfig",
+    "CONFIG_DIR",
+    "CONFIG_FILE",
     "discover_config_path",
     "load_config",
+    "write_config",
     "OAuthStore",
     "build_oauth_routes",
     "validate_oauth_token",

@@ -17,8 +17,12 @@ from macos_mcp.infrastructure import (
     is_loopback_host,
     parse_ip_allowlist,
     validate_url,
+    CONFIG_DIR,
+    CONFIG_FILE,
+    MacOSMCPConfig,
     discover_config_path,
     load_config,
+    write_config,
     OAuthStore,
     build_oauth_routes,
     validate_oauth_token,
@@ -35,7 +39,9 @@ from textwrap import dedent
 import asyncio
 import logging
 import os
+import secrets
 import signal
+import subprocess
 import sys
 from threading import Lock
 import click
@@ -476,7 +482,12 @@ def _choose_value(ctx: click.Context, name: str, cli_value, config_value, defaul
     return default_value
 
 
-@click.command()
+@click.group()
+def main():
+    """macOS-MCP: MCP server for macOS desktop automation."""
+
+
+@main.command()
 @click.pass_context
 @click.option(
     "--transport",
@@ -567,7 +578,7 @@ def _choose_value(ctx: click.Context, name: str, cli_value, config_value, defaul
     type=str,
     show_default=False,
 )
-def main(ctx, transport, host, port, debug, config, auth_key, allow_insecure_remote, ip_allowlist, ssl_certfile, ssl_keyfile, oauth_client_id, oauth_client_secret):
+def serve(ctx, transport, host, port, debug, config, auth_key, allow_insecure_remote, ip_allowlist, ssl_certfile, ssl_keyfile, oauth_client_id, oauth_client_secret):
     # Validate required permissions before starting server
     validate_permissions()
 
@@ -688,6 +699,70 @@ def main(ctx, transport, host, port, debug, config, auth_key, allow_insecure_rem
             )
         case _:
             raise ValueError(f"Invalid transport: {transport}")
+
+
+@main.command()
+@click.option("--with-tls", is_flag=True, help="Generate a self-signed TLS certificate and key.")
+@click.option("--force", is_flag=True, help="Overwrite existing credentials without prompting.")
+def auth(with_tls: bool, force: bool) -> None:
+    """Generate an auth key (and optionally TLS certs) and save to ~/.macos-mcp/config.toml."""
+    config_path = CONFIG_FILE
+
+    cfg = load_config(config_path) if config_path.exists() else MacOSMCPConfig()
+
+    if cfg.server.auth_key and not force:
+        click.echo(f"Auth key already set in {config_path}. Use --force to regenerate.")
+        return
+
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    new_key = secrets.token_urlsafe(32)
+    cfg.server.auth_key = new_key
+    click.echo(f"Generated auth key: {new_key}")
+
+    if with_tls:
+        cert_path = CONFIG_DIR / "cert.pem"
+        key_path = CONFIG_DIR / "key.pem"
+        click.echo("Generating self-signed TLS certificate (4096-bit RSA, 365 days)...")
+        result = subprocess.run(
+            [
+                "openssl", "req", "-x509", "-newkey", "rsa:4096",
+                "-keyout", str(key_path),
+                "-out", str(cert_path),
+                "-days", "365", "-nodes",
+                "-subj", "/CN=macos-mcp",
+            ],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise click.ClickException(f"openssl failed:\n{result.stderr.strip()}")
+        cfg.server.ssl_certfile = str(cert_path)
+        cfg.server.ssl_keyfile = str(key_path)
+        click.echo(f"  cert → {cert_path}")
+        click.echo(f"  key  → {key_path}")
+
+    write_config(cfg, config_path)
+    click.echo(f"\nSaved to {config_path}")
+
+    scheme = "https" if with_tls else "http"
+    click.echo("\n─── Start the server ───")
+    click.echo(f"  macos-mcp serve --transport sse --host 0.0.0.0")
+    if with_tls:
+        click.echo(f"  macos-mcp serve --transport streamable-http --host 0.0.0.0")
+
+    click.echo("\n─── Claude Desktop config (SSE) ───")
+    click.echo(
+        f"""\
+{{
+  "mcpServers": {{
+    "macos-mcp": {{
+      "type": "sse",
+      "url": "{scheme}://localhost:8000/sse",
+      "headers": {{ "Authorization": "Bearer {new_key}" }}
+    }}
+  }}
+}}"""
+    )
 
 
 if __name__ == "__main__":

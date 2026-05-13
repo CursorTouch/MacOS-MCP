@@ -121,3 +121,45 @@ def load_config(path: Path | None) -> MacOSMCPConfig:
 
     cfg.source_path = path
     return cfg
+
+
+def write_config(cfg: MacOSMCPConfig, path: Path) -> None:
+    """Serialize *cfg* to TOML at *path*, writing only non-default values."""
+    lines: list[str] = []
+
+    sd, dd = cfg.server, ServerConfig()
+    server_lines: list[str] = []
+    if sd.transport != dd.transport:
+        server_lines.append(f'transport = "{sd.transport}"')
+    if sd.host != dd.host:
+        server_lines.append(f'host = "{sd.host}"')
+    if sd.port != dd.port:
+        server_lines.append(f'port = {sd.port}')
+    if sd.allow_insecure_remote:
+        server_lines.append('allow_insecure_remote = true')
+    if sd.auth_key:
+        server_lines.append(f'auth_key = "{sd.auth_key}"')
+    if sd.ssl_certfile:
+        server_lines.append(f'ssl_certfile = "{sd.ssl_certfile}"')
+    if sd.ssl_keyfile:
+        server_lines.append(f'ssl_keyfile = "{sd.ssl_keyfile}"')
+    if server_lines:
+        lines += ['[server]'] + server_lines + ['']
+
+    sec = cfg.security
+    sec_lines: list[str] = []
+    if sec.ip_allowlist:
+        items = ', '.join(f'"{ip}"' for ip in sec.ip_allowlist)
+        sec_lines.append(f'ip_allowlist = [{items}]')
+    if sec.oauth_client_id:
+        sec_lines.append(f'oauth_client_id = "{sec.oauth_client_id}"')
+    if sec.oauth_client_secret:
+        sec_lines.append(f'oauth_client_secret = "{sec.oauth_client_secret}"')
+    if sec_lines:
+        lines += ['[security]'] + sec_lines + ['']
+
+    if cfg.tools.exclude:
+        items = ', '.join(f'"{t}"' for t in cfg.tools.exclude)
+        lines += ['[tools]', f'exclude = [{items}]', '']
+
+    path.write_text('\n'.join(lines), encoding='utf-8')
