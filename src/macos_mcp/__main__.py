@@ -702,9 +702,29 @@ def serve(ctx, transport, host, port, debug, config, auth_key, allow_insecure_re
 
 
 @main.command()
+@click.option(
+    "--transport",
+    type=click.Choice(["stdio", "sse", "streamable-http"]),
+    default="sse",
+    show_default=True,
+    help="Transport mode to configure. Saves the choice to config.toml.",
+)
+@click.option(
+    "--host",
+    default="0.0.0.0",
+    show_default=True,
+    help="Host to bind the server to.",
+)
+@click.option(
+    "--port",
+    default=8000,
+    show_default=True,
+    type=int,
+    help="Port to bind the server to.",
+)
 @click.option("--with-tls", is_flag=True, help="Generate a self-signed TLS certificate and key.")
 @click.option("--force", is_flag=True, help="Overwrite existing credentials without prompting.")
-def auth(with_tls: bool, force: bool) -> None:
+def auth(transport: str, host: str, port: int, with_tls: bool, force: bool) -> None:
     """Generate an auth key (and optionally TLS certs) and save to ~/.macos-mcp/config.toml."""
     config_path = CONFIG_FILE
 
@@ -718,9 +738,14 @@ def auth(with_tls: bool, force: bool) -> None:
 
     new_key = secrets.token_urlsafe(32)
     cfg.server.auth_key = new_key
+    cfg.server.transport = transport
+    cfg.server.host = host
+    cfg.server.port = port
     click.echo(f"Generated auth key: {new_key}")
 
     if with_tls:
+        if transport == "stdio":
+            raise click.ClickException("TLS has no effect on stdio transport.")
         cert_path = CONFIG_DIR / "cert.pem"
         key_path = CONFIG_DIR / "key.pem"
         click.echo("Generating self-signed TLS certificate (4096-bit RSA, 365 days)...")
@@ -744,25 +769,56 @@ def auth(with_tls: bool, force: bool) -> None:
     write_config(cfg, config_path)
     click.echo(f"\nSaved to {config_path}")
 
-    scheme = "https" if with_tls else "http"
-    click.echo("\n─── Start the server ───")
-    click.echo(f"  macos-mcp serve --transport sse --host 0.0.0.0")
-    if with_tls:
-        click.echo(f"  macos-mcp serve --transport streamable-http --host 0.0.0.0")
+    if transport == "stdio":
+        click.echo("\n─── Claude Desktop config (stdio) ───")
+        click.echo(
+            """\
+{
+  "mcpServers": {
+    "macos-mcp": {
+      "command": "uvx",
+      "args": ["macos-mcp", "serve"]
+    }
+  }
+}"""
+        )
+        return
 
-    click.echo("\n─── Claude Desktop config (SSE) ───")
-    click.echo(
-        f"""\
+    scheme = "https" if with_tls else "http"
+    mcp_url = f"{scheme}://{host}:{port}/mcp/"
+    sse_url = f"{scheme}://{host}:{port}/sse"
+
+    click.echo("\n─── Start the server ───")
+    click.echo(f"  macos-mcp serve")
+
+    if transport == "sse":
+        click.echo("\n─── Claude Desktop config (SSE) ───")
+        click.echo(
+            f"""\
 {{
   "mcpServers": {{
     "macos-mcp": {{
       "type": "sse",
-      "url": "{scheme}://localhost:8000/sse",
+      "url": "{sse_url}",
       "headers": {{ "Authorization": "Bearer {new_key}" }}
     }}
   }}
 }}"""
-    )
+        )
+    else:
+        click.echo("\n─── Claude Desktop config (Streamable HTTP) ───")
+        click.echo(
+            f"""\
+{{
+  "mcpServers": {{
+    "macos-mcp": {{
+      "type": "http",
+      "url": "{mcp_url}",
+      "headers": {{ "Authorization": "Bearer {new_key}" }}
+    }}
+  }}
+}}"""
+        )
 
 
 if __name__ == "__main__":
