@@ -33,6 +33,8 @@ dependencies = [
     "ipykernel",
     "notebook",
     "ipywidgets",
+    "posthog>=3.0.0",
+    "uuid7>=0.1.0",
 ]
 
 [project.optional-dependencies]

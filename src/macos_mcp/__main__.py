@@ -8,10 +8,28 @@ from macos_mcp.desktop.service import Desktop
 from macos_mcp.desktop.views import Size
 from macos_mcp.watchdog import WatchDog
 from macos_mcp.permissions import validate_permissions
+from macos_mcp.infrastructure import (
+    AuthKeyMiddleware,
+    OAuthOnlyMiddleware,
+    IPAllowlistMiddleware,
+    PostHogAnalytics,
+    Analytics,
+    is_loopback_host,
+    parse_ip_allowlist,
+    validate_url,
+    discover_config_path,
+    load_config,
+    OAuthStore,
+    build_oauth_routes,
+    validate_oauth_token,
+)
+from click.core import ParameterSource
 from contextlib import asynccontextmanager
 from fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
-from typing import Literal, Optional
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+from typing import Any, Literal, Optional
 from fastmcp import FastMCP, Context
 from textwrap import dedent
 import asyncio
@@ -27,6 +45,7 @@ logger = logging.getLogger(__name__)
 desktop: Optional[Desktop] = None
 screen_size: Optional[Size] = None
 watchdog: Optional[WatchDog] = None
+analytics: Optional[Analytics] = None
 _shutdown_lock = Lock()
 _shutdown_started = False
 
@@ -72,10 +91,57 @@ def _force_exit(exit_code: int = 130) -> None:
     os._exit(exit_code)
 
 
+class OptionsMiddleware:
+    """ASGI middleware that intercepts OPTIONS requests and returns 200 OK."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope["method"] == "OPTIONS":
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [
+                        [b"content-length", b"0"],
+                        [b"access-control-allow-origin", b"*"],
+                        [b"access-control-allow-methods", b"*"],
+                        [b"access-control-allow-headers", b"*"],
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": b""})
+        else:
+            await self.app(scope, receive, send)
+
+
+def _http_middleware(
+    auth_key: str | None = None,
+    ip_allowlist: list | None = None,
+    oauth_validator=None,
+) -> list:
+    """Return ASGI middleware for HTTP transports including CORS and OPTIONS handling."""
+    middleware = [
+        Middleware(OptionsMiddleware),
+        Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]),
+    ]
+    if ip_allowlist:
+        middleware.append(Middleware(IPAllowlistMiddleware, allowlist=ip_allowlist))
+    if auth_key:
+        middleware.append(Middleware(AuthKeyMiddleware, auth_key=auth_key, oauth_validator=oauth_validator))
+    elif oauth_validator:
+        middleware.append(Middleware(OAuthOnlyMiddleware, oauth_validator=oauth_validator))
+    return middleware
+
+
 @asynccontextmanager
 async def lifespan(app: FastMCP):
     """Runs initialization code before the server starts and cleanup code after it shuts down."""
-    global desktop, screen_size, watchdog, _shutdown_started
+    global desktop, screen_size, watchdog, analytics, _shutdown_started
+
+    if os.getenv("ANONYMIZED_TELEMETRY", "true").lower() != "false":
+        analytics = PostHogAnalytics()
 
     desktop = Desktop()
     screen_size = desktop.get_screen_size()
@@ -95,6 +161,8 @@ async def lifespan(app: FastMCP):
         yield
     finally:
         _stop_watchdog()
+        if analytics:
+            await analytics.close()
 
 
 mcp = FastMCP(name="macos-mcp", instructions=instructions, lifespan=lifespan)
@@ -354,6 +422,7 @@ def wait_tool(duration: int, ctx: Context = None) -> str:
     ),
 )
 def scrape_tool(url: str, ctx: Context = None) -> str:
+    validate_url(url)
     content = desktop.scrape(url)
     return f"URL:{url}\nContent:\n{content}"
 
@@ -394,7 +463,21 @@ def notification_tool(
     return desktop.notify(message, title, subtitle, sound)
 
 
+def _param_explicit(ctx: click.Context, name: str) -> bool:
+    src = ctx.get_parameter_source(name)
+    return src in {ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT}
+
+
+def _choose_value(ctx: click.Context, name: str, cli_value, config_value, default_value):
+    if _param_explicit(ctx, name):
+        return cli_value
+    if config_value is not None:
+        return config_value
+    return default_value
+
+
 @click.command()
+@click.pass_context
 @click.option(
     "--transport",
     help="The transport layer used by the MCP server.",
@@ -404,7 +487,7 @@ def notification_tool(
 @click.option(
     "--host",
     help="Host to bind the SSE/Streamable HTTP server.",
-    default="localhost",
+    default="127.0.0.1",
     type=str,
     show_default=True,
 )
@@ -415,9 +498,161 @@ def notification_tool(
     type=int,
     show_default=True,
 )
-def main(transport, host, port):
+@click.option(
+    "--debug",
+    help="Enable debug mode to provide verbose logging for troubleshooting.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--config",
+    help="Path to macos-mcp.toml config file.",
+    default=None,
+    type=click.Path(dir_okay=False),
+    show_default=False,
+)
+@click.option(
+    "--auth-key",
+    help="Bearer token required on all HTTP requests. Can also be set via MACOS_MCP_AUTH_KEY.",
+    default=None,
+    envvar="MACOS_MCP_AUTH_KEY",
+    type=str,
+    show_default=False,
+)
+@click.option(
+    "--allow-insecure-remote",
+    help="Allow binding to non-loopback addresses without authentication (not recommended).",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "--ip-allowlist",
+    help="Comma-separated list of allowed client IPs or CIDR ranges (e.g. '10.0.0.0/8,192.168.1.5'). IPv4 and IPv6 supported.",
+    default=None,
+    envvar="MACOS_MCP_IP_ALLOWLIST",
+    type=str,
+    show_default=False,
+)
+@click.option(
+    "--ssl-certfile",
+    help="Path to TLS certificate file (.pem) for HTTPS. Requires --ssl-keyfile.",
+    default=None,
+    envvar="MACOS_MCP_SSL_CERTFILE",
+    type=str,
+    show_default=False,
+)
+@click.option(
+    "--ssl-keyfile",
+    help="Path to TLS private key file (.pem) for HTTPS. Requires --ssl-certfile.",
+    default=None,
+    envvar="MACOS_MCP_SSL_KEYFILE",
+    type=str,
+    show_default=False,
+)
+@click.option(
+    "--oauth-client-id",
+    help="OAuth client ID (pre-provisioned confidential client). Requires --oauth-client-secret.",
+    default=None,
+    envvar="MACOS_MCP_OAUTH_CLIENT_ID",
+    type=str,
+    show_default=False,
+)
+@click.option(
+    "--oauth-client-secret",
+    help="OAuth client secret. Requires --oauth-client-id.",
+    default=None,
+    envvar="MACOS_MCP_OAUTH_CLIENT_SECRET",
+    type=str,
+    show_default=False,
+)
+def main(ctx, transport, host, port, debug, config, auth_key, allow_insecure_remote, ip_allowlist, ssl_certfile, ssl_keyfile, oauth_client_id, oauth_client_secret):
     # Validate required permissions before starting server
     validate_permissions()
+
+    if debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        for name in ["uvicorn", "uvicorn.error", "uvicorn.access", "fastmcp"]:
+            logging.getLogger(name).setLevel(logging.DEBUG)
+
+    # Load config file and merge with CLI flags (CLI wins)
+    config_path = discover_config_path(config)
+    try:
+        cfg = load_config(config_path)
+    except (FileNotFoundError, ValueError) as exc:
+        raise click.ClickException(str(exc))
+
+    transport = _choose_value(ctx, "transport", transport, cfg.server.transport, "stdio")
+    host = _choose_value(ctx, "host", host, cfg.server.host, "127.0.0.1")
+    port = int(_choose_value(ctx, "port", port, cfg.server.port, 8000))
+    auth_key = _choose_value(ctx, "auth_key", auth_key, cfg.server.auth_key, None)
+    allow_insecure_remote = bool(
+        _choose_value(ctx, "allow_insecure_remote", allow_insecure_remote, cfg.server.allow_insecure_remote, False)
+    )
+    ssl_certfile = _choose_value(ctx, "ssl_certfile", ssl_certfile, cfg.server.ssl_certfile, None)
+    ssl_keyfile = _choose_value(ctx, "ssl_keyfile", ssl_keyfile, cfg.server.ssl_keyfile, None)
+    oauth_client_id = _choose_value(ctx, "oauth_client_id", oauth_client_id, cfg.security.oauth_client_id, None)
+    oauth_client_secret = _choose_value(
+        ctx, "oauth_client_secret", oauth_client_secret, cfg.security.oauth_client_secret, None
+    )
+
+    cli_allowlist = [e.strip() for e in ip_allowlist.split(",")] if ip_allowlist else None
+    allowlist_entries = cli_allowlist if _param_explicit(ctx, "ip_allowlist") else cfg.security.ip_allowlist
+
+    if bool(ssl_certfile) != bool(ssl_keyfile):
+        raise click.ClickException("--ssl-certfile and --ssl-keyfile must be provided together.")
+
+    if bool(oauth_client_id) != bool(oauth_client_secret):
+        raise click.ClickException("OAuth requires both --oauth-client-id and --oauth-client-secret.")
+
+    parsed_allowlist = None
+    if allowlist_entries:
+        try:
+            parsed_allowlist = parse_ip_allowlist(allowlist_entries)
+        except ValueError as exc:
+            raise click.ClickException(f"Invalid ip_allowlist: {exc}")
+
+    configured_oauth = bool(oauth_client_id and oauth_client_secret)
+
+    if (
+        transport != "stdio"
+        and not is_loopback_host(host)
+        and not auth_key
+        and not configured_oauth
+        and not allow_insecure_remote
+    ):
+        raise click.ClickException(
+            f"Refusing to bind HTTP transport to '{host}' without authentication.\n"
+            "  Use --auth-key <token> or --oauth-client-id/--oauth-client-secret.\n"
+            "  Or pass --allow-insecure-remote to explicitly allow unauthenticated access (not recommended)."
+        )
+
+    if (auth_key or allowlist_entries) and transport == "stdio":
+        logger.warning("auth_key / ip_allowlist have no effect on stdio transport")
+
+    # Set up OAuth routes if configured (HTTP transports only)
+    oauth_validator = None
+    if configured_oauth and transport != "stdio":
+        oauth_store = OAuthStore()
+        scheme = "https" if (ssl_certfile and ssl_keyfile) else "http"
+        issuer = f"{scheme}://{host}:{port}"
+        routes = build_oauth_routes(
+            store=oauth_store,
+            issuer=issuer,
+            configured_client_id=oauth_client_id,
+            configured_client_secret=oauth_client_secret,
+        )
+        for path, (handler, methods) in routes.items():
+            mcp.custom_route(path, methods=methods)(handler)
+        oauth_validator = lambda tok: validate_oauth_token(oauth_store, tok)  # noqa: E731
+
+    for tool_name in cfg.tools.exclude:
+        try:
+            mcp.remove_tool(tool_name)
+            logger.debug(f"Excluded tool: {tool_name}")
+        except Exception:
+            logger.warning(f"Could not exclude tool '{tool_name}' — not found")
 
     previous_sigint_handler = None
 
@@ -439,7 +674,18 @@ def main(transport, host, port):
                 if previous_sigint_handler is not None:
                     signal.signal(signal.SIGINT, previous_sigint_handler)
         case "sse" | "streamable-http":
-            mcp.run(transport=transport, host=host, port=port, show_banner=False)
+            uvicorn_config: dict = {}
+            if ssl_certfile and ssl_keyfile:
+                uvicorn_config["ssl_certfile"] = ssl_certfile
+                uvicorn_config["ssl_keyfile"] = ssl_keyfile
+            mcp.run(
+                transport=transport,
+                host=host,
+                port=port,
+                show_banner=False,
+                middleware=_http_middleware(auth_key=auth_key, ip_allowlist=parsed_allowlist, oauth_validator=oauth_validator),
+                uvicorn_config=uvicorn_config or None,
+            )
         case _:
             raise ValueError(f"Invalid transport: {transport}")
 
