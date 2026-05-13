@@ -701,6 +701,58 @@ def serve(ctx, transport, host, port, debug, config, auth_key, allow_insecure_re
             raise ValueError(f"Invalid transport: {transport}")
 
 
+def _gen_tls(host: str, cert_path, key_path) -> None:
+    """Generate a TLS cert/key pair, preferring mkcert over openssl."""
+    from pathlib import Path
+
+    cert_path = Path(cert_path)
+    key_path = Path(key_path)
+
+    mkcert = subprocess.run(["which", "mkcert"], capture_output=True).returncode == 0
+
+    if mkcert:
+        click.echo("mkcert detected — generating a locally-trusted certificate...")
+        install = subprocess.run(["mkcert", "-install"], capture_output=True, text=True)
+        if install.returncode != 0:
+            raise click.ClickException(f"mkcert -install failed:\n{install.stderr.strip()}")
+
+        # mkcert needs the host name/IP; use localhost as extra SAN when binding 0.0.0.0
+        sans = [host] if host not in ("0.0.0.0", "") else ["localhost", "127.0.0.1", "::1"]
+        result = subprocess.run(
+            [
+                "mkcert",
+                "-cert-file", str(cert_path),
+                "-key-file", str(key_path),
+                *sans,
+            ],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise click.ClickException(f"mkcert failed:\n{result.stderr.strip()}")
+        click.echo("  Certificate is automatically trusted by macOS.")
+    else:
+        click.echo("mkcert not found — falling back to openssl (self-signed)...")
+        click.echo("  Tip: brew install mkcert  for auto-trusted certs next time.")
+        result = subprocess.run(
+            [
+                "openssl", "req", "-x509", "-newkey", "rsa:4096",
+                "-keyout", str(key_path),
+                "-out", str(cert_path),
+                "-days", "365", "-nodes",
+                "-subj", f"/CN={host or 'macos-mcp'}",
+            ],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            raise click.ClickException(f"openssl failed:\n{result.stderr.strip()}")
+        click.echo("  To make macOS trust this cert, run:")
+        click.echo(f"    sudo security add-trusted-cert -d -r trustRoot \\")
+        click.echo(f"      -k /Library/Keychains/System.keychain {cert_path}")
+
+    click.echo(f"  cert → {cert_path}")
+    click.echo(f"  key  → {key_path}")
+
+
 @main.command()
 @click.option(
     "--transport",
@@ -748,23 +800,9 @@ def auth(transport: str, host: str, port: int, with_tls: bool, force: bool) -> N
             raise click.ClickException("TLS has no effect on stdio transport.")
         cert_path = CONFIG_DIR / "cert.pem"
         key_path = CONFIG_DIR / "key.pem"
-        click.echo("Generating self-signed TLS certificate (4096-bit RSA, 365 days)...")
-        result = subprocess.run(
-            [
-                "openssl", "req", "-x509", "-newkey", "rsa:4096",
-                "-keyout", str(key_path),
-                "-out", str(cert_path),
-                "-days", "365", "-nodes",
-                "-subj", "/CN=macos-mcp",
-            ],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            raise click.ClickException(f"openssl failed:\n{result.stderr.strip()}")
+        _gen_tls(host, cert_path, key_path)
         cfg.server.ssl_certfile = str(cert_path)
         cfg.server.ssl_keyfile = str(key_path)
-        click.echo(f"  cert → {cert_path}")
-        click.echo(f"  key  → {key_path}")
 
     write_config(cfg, config_path)
     click.echo(f"\nSaved to {config_path}")
