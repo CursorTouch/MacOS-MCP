@@ -72,6 +72,7 @@ class Desktop:
             if not app:
                 return f"Application '{name}' not found."
             ax.ActivateApplication(app.PID)
+            time.sleep(0.2)
             return f"Switched to {name}."
         if mode == "resize":
             app = ax.GetFrontmostApplication()
@@ -216,14 +217,15 @@ class Desktop:
         ax.HotKey(*keys)
 
     def scrape(self, url: str) -> str:
-        """Fetch URL content as text."""
+        """Fetch URL content as markdown."""
         try:
             headers = {
-                "User-Agent": "macOS-MCP/0.3.1 (macOS Desktop Automation MCP Server)"
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
             }
             r = requests.get(url, timeout=10, headers=headers)
             r.raise_for_status()
-            return r.text
+            from markdownify import markdownify
+            return markdownify(r.text, strip=["script", "style"])
         except Exception as e:
             return str(e)
 
@@ -234,19 +236,18 @@ class Desktop:
     def get_foreground_window(self) -> Optional[Window]:
         FINDER_BUNDLE_ID = "com.apple.finder"
         time.sleep(0.05)
-        # Use menu bar owner as source of truth — it always matches what the user sees
-        # in the menu bar and correctly reflects focus even when a background app still
-        # has a layer-0 window (e.g. antigravity still open but not frontmost).
-        pid = ax.GetMenuBarOwningApplication()
+        # GetFrontmostApplication is the most reliable source for the active app
+        pid = None
+        frontmost = ax.GetFrontmostApplication()
+        if frontmost:
+            try:
+                pid = frontmost.PID
+            except Exception:
+                pid = None
+        if not pid:
+            pid = ax.GetMenuBarOwningApplication()
         if not pid:
             pid = ax.GetForegroundWindowPID()
-        if not pid:
-            pid_from_app = ax.GetFrontmostApplication()
-            if pid_from_app:
-                try:
-                    pid = pid_from_app.PID
-                except Exception:
-                    pid = None
         app = None
         if pid:
             try:

@@ -1962,10 +1962,18 @@ def GetRunningApplicationByName(name: str) -> Optional["ApplicationControl"]:
     from .controls import ApplicationControl
 
     name_lower = name.strip().lower()
+    # First pass: match against NSWorkspace localizedName
     for app in NSWorkspace.sharedWorkspace().runningApplications():
         local_name = app.localizedName()
         if local_name and str(local_name).lower() == name_lower:
             return ApplicationControl(pid=app.processIdentifier())
+    # Second pass: match against AX-reported name (ApplicationControl.Name),
+    # which may differ (e.g. "Chrome" vs "Google Chrome")
+    for app in NSWorkspace.sharedWorkspace().runningApplications():
+        ctrl = ApplicationControl(pid=app.processIdentifier())
+        ax_name = ctrl.Name
+        if ax_name and str(ax_name).lower() == name_lower:
+            return ctrl
     return None
 
 

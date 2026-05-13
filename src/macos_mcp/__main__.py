@@ -428,9 +428,13 @@ def wait_tool(duration: int, ctx: Context = None) -> str:
         openWorldHint=True,
     ),
 )
+_SCRAPE_MAX_CHARS = 20_000
+
 def scrape_tool(url: str, ctx: Context = None) -> str:
     validate_url(url)
     content = desktop.scrape(url)
+    if len(content) > _SCRAPE_MAX_CHARS:
+        content = content[:_SCRAPE_MAX_CHARS] + f"\n\n...[truncated — {len(content) - _SCRAPE_MAX_CHARS} chars omitted. Scroll the page and scrape again to read more.]"
     return f"URL:{url}\nContent:\n{content}"
 
 
