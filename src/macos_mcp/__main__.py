@@ -27,7 +27,6 @@ from macos_mcp.infrastructure import (
     build_oauth_routes,
     validate_oauth_token,
 )
-from click.core import ParameterSource
 from contextlib import asynccontextmanager
 from fastmcp.utilities.types import Image
 from mcp.types import ToolAnnotations
@@ -39,7 +38,9 @@ from textwrap import dedent
 import asyncio
 import logging
 import os
+from pathlib import Path
 import secrets
+import shutil
 import signal
 import subprocess
 import sys
@@ -471,7 +472,7 @@ def notification_tool(
 
 def _param_explicit(ctx: click.Context, name: str) -> bool:
     src = ctx.get_parameter_source(name)
-    return src in {ParameterSource.COMMANDLINE, ParameterSource.ENVIRONMENT}
+    return getattr(src, "name", None) in {"COMMANDLINE", "ENVIRONMENT"}
 
 
 def _choose_value(ctx: click.Context, name: str, cli_value, config_value, default_value):
@@ -703,8 +704,6 @@ def serve(ctx, transport, host, port, debug, config, auth_key, allow_insecure_re
 
 def _gen_tls(host: str, cert_path, key_path) -> None:
     """Generate a TLS cert/key pair, preferring mkcert over openssl."""
-    from pathlib import Path
-
     cert_path = Path(cert_path)
     key_path = Path(key_path)
 
@@ -857,6 +856,124 @@ def auth(transport: str, host: str, port: int, with_tls: bool, force: bool) -> N
   }}
 }}"""
         )
+
+
+_AGENT_LABEL = "com.macos-mcp.server"
+_LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
+_PLIST_PATH = _LAUNCH_AGENTS_DIR / f"{_AGENT_LABEL}.plist"
+
+
+def _resolve_program() -> list[str]:
+    """Return the argv prefix to invoke `macos-mcp serve` from launchd."""
+    macos_mcp = shutil.which("macos-mcp")
+    if macos_mcp:
+        # Avoid paths inside uv's ephemeral tool cache (uvx runs)
+        if not any(m in macos_mcp for m in (".cache/uv", "uv/tools", "uv\\tools")):
+            return [macos_mcp]
+    uvx = shutil.which("uvx")
+    if uvx:
+        return [uvx, "macos-mcp"]
+    raise click.ClickException(
+        "Cannot find macos-mcp or uvx in PATH.\n"
+        "Install via: pip install macos-mcp  or  brew install uv"
+    )
+
+
+def _build_plist(program_args: list[str]) -> str:
+    log_out = CONFIG_DIR / "server.log"
+    log_err = CONFIG_DIR / "server.error.log"
+    args_xml = "\n".join(f"        <string>{a}</string>" for a in program_args)
+    return f"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{_AGENT_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+{args_xml}
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>{log_out}</string>
+    <key>StandardErrorPath</key>
+    <string>{log_err}</string>
+</dict>
+</plist>"""
+
+
+def _launchctl(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["launchctl", *args], capture_output=True, text=True)
+
+
+@main.command()
+@click.option(
+    "--transport",
+    type=click.Choice(["sse", "streamable-http"]),
+    default="streamable-http",
+    show_default=True,
+    help="Transport for the background server (stdio not supported as a service).",
+)
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind.")
+@click.option("--port", default=8000, show_default=True, type=int, help="Port to bind.")
+@click.option("--force", is_flag=True, help="Reinstall even if already installed.")
+def install(transport: str, host: str, port: int, force: bool) -> None:
+    """Install macos-mcp as a launchd Launch Agent that starts at login."""
+    if _PLIST_PATH.exists() and not force:
+        click.echo(f"Launch agent already installed at {_PLIST_PATH}.")
+        click.echo("Use --force to reinstall.")
+        return
+
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    _LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    exe = _resolve_program()
+    args = exe + ["serve", "--transport", transport, "--host", host, "--port", str(port)]
+    _PLIST_PATH.write_text(_build_plist(args))
+    click.echo(f"Wrote {_PLIST_PATH}")
+
+    uid = os.getuid()
+    domain = f"gui/{uid}"
+
+    # Unload first if already running (needed for --force)
+    _launchctl("bootout", f"{domain}/{_AGENT_LABEL}")
+
+    result = _launchctl("bootstrap", domain, str(_PLIST_PATH))
+    if result.returncode != 0:
+        raise click.ClickException(f"launchctl bootstrap failed:\n{result.stderr.strip()}")
+
+    click.echo(f"Launch agent loaded — server is starting now.")
+    click.echo(f"  Transport : {transport}")
+    click.echo(f"  Address   : {host}:{port}")
+    click.echo(f"  Logs      : {CONFIG_DIR / 'server.log'}")
+    click.echo(f"\nThe server will restart automatically at every login.")
+    click.echo(f"Run `macos-mcp uninstall` to remove it.")
+
+
+@main.command()
+def uninstall() -> None:
+    """Remove the macos-mcp Launch Agent and stop the background server."""
+    uid = os.getuid()
+    result = _launchctl("bootout", f"gui/{uid}/{_AGENT_LABEL}")
+    if result.returncode == 0:
+        click.echo("Stopped the running server.")
+    elif _PLIST_PATH.exists():
+        # Agent wasn't loaded but plist exists — that's fine, just remove it
+        pass
+    else:
+        click.echo("No active launch agent found.")
+
+    if _PLIST_PATH.exists():
+        _PLIST_PATH.unlink()
+        click.echo(f"Removed {_PLIST_PATH}")
+    else:
+        click.echo("Plist already removed.")
+
+    click.echo("macos-mcp will no longer start at login.")
 
 
 if __name__ == "__main__":
