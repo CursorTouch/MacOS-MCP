@@ -62,6 +62,19 @@ uvx macos-mcp --transport sse --host localhost --port 8000
 uvx macos-mcp --transport streamable-http --host localhost --port 8000
 ```
 
+Run it as a background service that starts now and at every login:
+
+```shell
+macos-mcp install
+
+# Or choose the HTTP transport and bind address explicitly
+macos-mcp install --transport sse --host 127.0.0.1 --port 8000
+```
+
+This installs a `launchd` Launch Agent at `~/Library/LaunchAgents/com.macos-mcp.server.plist`.
+Use `macos-mcp uninstall` to remove it. Logs are written to `~/.macos-mcp/server.log`
+and `~/.macos-mcp/server.error.log`.
+
 ### Transport Options
 
 | Transport | Flag | Use Case |
