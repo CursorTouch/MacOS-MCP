@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.Jeomon/macos-mcp -->
 <div align="center">
   <h1>🍎 macOS-MCP</h1>
 
