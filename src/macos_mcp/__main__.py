@@ -417,6 +417,9 @@ def wait_tool(duration: int, ctx: Context = None) -> str:
     return f"Waited for {duration} seconds."
 
 
+_SCRAPE_MAX_CHARS = 20_000
+
+
 @mcp.tool(
     name="Scrape",
     description="Fetch content from a URL. Performs a lightweight HTTP request and returns the page content as text.",
@@ -428,8 +431,6 @@ def wait_tool(duration: int, ctx: Context = None) -> str:
         openWorldHint=True,
     ),
 )
-_SCRAPE_MAX_CHARS = 20_000
-
 def scrape_tool(url: str, ctx: Context = None) -> str:
     validate_url(url)
     content = desktop.scrape(url)
