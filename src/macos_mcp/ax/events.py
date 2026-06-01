@@ -102,10 +102,13 @@ class AppObserver:
                 self.pid, _global_observer_callback, None
             )
             if error != kAXErrorSuccess or not self.observer:
+                self.ax_app = None
                 return False
 
             self.run_loop_source = AXObserverGetRunLoopSource(self.observer)
             if not self.run_loop_source:
+                self.observer = None
+                self.ax_app = None
                 return False
 
             run_loop = CFRunLoopGetCurrent()
@@ -121,10 +124,19 @@ class AppObserver:
                 except Exception:
                     pass
 
-            return len(self.registered_notifications) > 0
+            if not self.registered_notifications:
+                # Run loop source was already added; remove it before bailing.
+                CFRunLoopRemoveSource(run_loop, self.run_loop_source, kCFRunLoopDefaultMode)
+                self.run_loop_source = None
+                self.observer = None
+                self.ax_app = None
+                return False
+
+            return True
 
         except Exception as e:
             logger.debug(f"Failed to start observer for PID {self.pid}: {e}")
+            self.stop()
             return False
 
     def stop(self) -> None:
@@ -363,7 +375,10 @@ class EventObserver:
                 observer = AppObserver(pid, self)
                 if observer.start(notifications):
                     self._app_observers[pid] = observer
-                    self._observed_pids.add(pid)
+                else:
+                    # Mark as seen so we don't retry every 0.1 s and leak CF objects.
+                    observer.stop()
+                self._observed_pids.add(pid)
 
     def _run(self) -> None:
         """Main event loop running in a dedicated thread."""
