@@ -24,6 +24,8 @@ THREAD_MAX_RETRIES = 3
 
 
 class Tree:
+    _executor = ThreadPoolExecutor()
+
     def on_focus_changed(self, element, notification: str, pid: int) -> None:
         """
         Callback invoked by WatchDog when focus changes (FocusedUIElementChanged,
@@ -96,50 +98,50 @@ class Tree:
                 is_browser = bundle_id in BROWSER_BUNDLE_IDS
                 task_inputs.append((bundle_id, is_browser, True))
 
-        with ThreadPoolExecutor() as executor:
-            retry_counts: dict[str, int] = {bid: 0 for bid, _, __ in task_inputs}
-            future_to_bundle_id: dict = {}
-            for bid, is_browser, desktop_only in task_inputs:
-                future = executor.submit(self.get_nodes, bid, is_browser, desktop_only)
-                future_to_bundle_id[future] = bid
+        executor = self._executor
+        retry_counts: dict[str, int] = {bid: 0 for bid, _, __ in task_inputs}
+        future_to_bundle_id: dict = {}
+        for bid, is_browser, desktop_only in task_inputs:
+            future = executor.submit(self.get_nodes, bid, is_browser, desktop_only)
+            future_to_bundle_id[future] = bid
 
-            while future_to_bundle_id:
-                for future in as_completed(list(future_to_bundle_id)):
-                    bundle_id = future_to_bundle_id.pop(future)
-                    try:
-                        result = future.result()
-                        if result:
-                            element_nodes, scroll_nodes, info_nodes = result
-                            interactive_nodes.extend(element_nodes)
-                            scrollable_nodes.extend(scroll_nodes)
-                            dom_informative_nodes.extend(info_nodes)
-                    except Exception as e:
-                        retry_counts[bundle_id] = retry_counts.get(bundle_id, 0) + 1
-                        logger.debug(
-                            "Error processing bundle %s, retry %d: %s",
-                            bundle_id,
-                            retry_counts[bundle_id],
-                            e,
+        while future_to_bundle_id:
+            for future in as_completed(list(future_to_bundle_id)):
+                bundle_id = future_to_bundle_id.pop(future)
+                try:
+                    result = future.result()
+                    if result:
+                        element_nodes, scroll_nodes, info_nodes = result
+                        interactive_nodes.extend(element_nodes)
+                        scrollable_nodes.extend(scroll_nodes)
+                        dom_informative_nodes.extend(info_nodes)
+                except Exception as e:
+                    retry_counts[bundle_id] = retry_counts.get(bundle_id, 0) + 1
+                    logger.debug(
+                        "Error processing bundle %s, retry %d: %s",
+                        bundle_id,
+                        retry_counts[bundle_id],
+                        e,
+                    )
+                    if retry_counts[bundle_id] < THREAD_MAX_RETRIES:
+                        is_browser = next(
+                            (ib for b, ib, _ in task_inputs if b == bundle_id), False
                         )
-                        if retry_counts[bundle_id] < THREAD_MAX_RETRIES:
-                            is_browser = next(
-                                (ib for b, ib, _ in task_inputs if b == bundle_id), False
-                            )
-                            desktop_only = next(
-                                (do for b, _, do in task_inputs if b == bundle_id), False
-                            )
-                            new_future = executor.submit(
-                                self.get_nodes, bundle_id, is_browser, desktop_only
-                            )
-                            future_to_bundle_id[new_future] = bundle_id
-                        else:
-                            logger.error(
-                                "Task failed for bundle %s after %d retries. Exact error: %s",
-                                bundle_id,
-                                THREAD_MAX_RETRIES,
-                                e,
-                                exc_info=True,
-                            )
+                        desktop_only = next(
+                            (do for b, _, do in task_inputs if b == bundle_id), False
+                        )
+                        new_future = executor.submit(
+                            self.get_nodes, bundle_id, is_browser, desktop_only
+                        )
+                        future_to_bundle_id[new_future] = bundle_id
+                    else:
+                        logger.error(
+                            "Task failed for bundle %s after %d retries. Exact error: %s",
+                            bundle_id,
+                            THREAD_MAX_RETRIES,
+                            e,
+                            exc_info=True,
+                        )
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
     def get_nodes(
