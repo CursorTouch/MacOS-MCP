@@ -83,8 +83,17 @@ def request_permissions() -> Tuple[bool, bool]:
 def validate_permissions() -> None:
     """
     Validate that all required permissions are granted.
-    Exits with error code 1 if any permission is missing.
+
+    When launched as a subprocess by a parent that already holds TCC grants
+    (e.g. Claude Desktop), AXIsProcessTrusted() returns False for the child
+    binary even though AX calls succeed via inheritance.  Setting
+    MACOS_MCP_SKIP_PERMISSION_CHECK=1 downgrades the failure to a warning so
+    the server starts instead of exiting.
     """
+    import os
+
+    skip = os.environ.get("MACOS_MCP_SKIP_PERMISSION_CHECK", "0") == "1"
+
     accessibility_ok, screen_recording_ok = request_permissions()
 
     if not accessibility_ok or not screen_recording_ok:
@@ -94,8 +103,12 @@ def validate_permissions() -> None:
         if not screen_recording_ok:
             missing.append("Screen Recording")
 
-        logger.error(
+        msg = (
             f"Required permissions not granted: {', '.join(missing)}. "
             "Please enable them in System Preferences > Privacy & Security and restart the MCP server."
         )
-        sys.exit(1)
+        if skip:
+            logger.warning(msg + " (continuing anyway — MACOS_MCP_SKIP_PERMISSION_CHECK=1)")
+        else:
+            logger.error(msg)
+            sys.exit(1)

@@ -1817,7 +1817,6 @@ def ExecuteCommand(
         Tuple of (output, return_code).
     """
     import os
-    import shlex
 
     env = os.environ.copy()
     try:
@@ -1831,12 +1830,12 @@ def ExecuteCommand(
                 env=env,
             )
         else:
-            try:
-                args = shlex.split(command)
-            except ValueError as e:
-                return (f"Invalid command syntax: {e}", -1)
             result = subprocess.run(
-                args, capture_output=True, text=True, timeout=timeout, env=env
+                ["/bin/bash", "-c", command],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
             )
         output = result.stdout or result.stderr or ""
         return (output.strip(), result.returncode)
