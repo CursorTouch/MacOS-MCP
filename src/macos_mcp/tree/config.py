@@ -42,6 +42,26 @@ CONTAINER_ROLES = {
     "AXLayoutItem",
 }
 
+# Text roles - roles that carry readable textual content for UI context
+TEXT_ROLES = {
+    "AXStaticText",
+    "AXHeading",
+}
+
+# Roles whose child static text is their own label, not independent context
+TEXT_OWNING_ROLES = {
+    "AXLink",
+    "AXButton",
+    "AXMenuItem",
+    "AXMenuButton",
+    "AXMenuBarItem",
+    "AXTab",
+    "AXDockItem",
+    "AXCheckBox",
+    "AXRadioButton",
+    "AXCell",
+}
+
 # Non-interactive roles - informational elements
 NON_INTERACTIVE_ROLES = {
     "AXList",

@@ -18,6 +18,7 @@ class TreeState:
     interactive_nodes: list["TreeElementNode"] | None = field(default_factory=list)
     scrollable_nodes: list["ScrollElementNode"] | None = field(default_factory=list)
     dom_informative_nodes: list["TextElementNode"] | None = field(default_factory=list)
+    ordered_nodes: list["ElementNode"] = field(default_factory=list)
 
     def interactive_elements_to_string(self) -> str:
         parts = []
@@ -36,6 +37,22 @@ class TreeState:
             rows.append(row)
         parts.append("\n".join(rows))
         return "\n".join(parts)
+
+    def ui_context_to_string(self) -> str:
+        if not self.status:
+            return WARNING_MESSAGE
+        if not self.ordered_nodes:
+            return EMPTY_MESSAGE
+        node_to_idx = {id(node): idx for idx, node in enumerate(self.interactive_nodes or [])}
+        rows = []
+        for node in self.ordered_nodes:
+            if isinstance(node, TextElementNode):
+                rows.append(f"[{node.text}]")
+            else:
+                idx = node_to_idx.get(id(node), "?")
+                row = f"{idx}|{node.window_name}|{node.control_type}|{node.name}|{node.center.to_string()}|{json.dumps(node.metadata)}"
+                rows.append(row)
+        return "\n".join(rows)
 
     def scrollable_elements_to_string(self) -> str:
         parts = []
@@ -171,6 +188,7 @@ class ScrollElementNode:
 @dataclass
 class TextElementNode:
     text: str
+    window_name: str = ""
 
 
 ElementNode = TreeElementNode | ScrollElementNode | TextElementNode

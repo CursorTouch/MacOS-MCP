@@ -3,6 +3,8 @@ from macos_mcp.tree.config import (
     SCROLLABLE_ROLES,
     WINDOW_CONTROL_SUBROLES,
     PRUNABLE_ROLES,
+    TEXT_ROLES,
+    TEXT_OWNING_ROLES,
 )
 from macos_mcp.tree.views import (
     TreeState,
@@ -59,7 +61,7 @@ class Tree:
             if is_windowless:
                 desktop_only_bundle_ids.append(FINDER_BUNDLE_ID)
 
-        interactive_nodes, scrollable_nodes, dom_informative_nodes = (
+        interactive_nodes, scrollable_nodes, ordered_nodes = (
             self.get_window_wise_nodes(
                 bundle_ids=bundle_ids,
                 system_bundle_ids=system_bundle_ids,
@@ -71,7 +73,7 @@ class Tree:
             status=True,
             interactive_nodes=interactive_nodes,
             scrollable_nodes=scrollable_nodes,
-            dom_informative_nodes=dom_informative_nodes,
+            ordered_nodes=ordered_nodes,
         )
 
     def get_window_wise_nodes(
@@ -79,10 +81,10 @@ class Tree:
         bundle_ids: list[str],
         system_bundle_ids: list[str] | None = None,
         desktop_only_bundle_ids: list[str] | None = None,
-    ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
+    ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
-        dom_informative_nodes: list[TextElementNode] = []
+        ordered_nodes: list = []
 
         if system_bundle_ids is None:
             system_bundle_ids = []
@@ -111,10 +113,10 @@ class Tree:
                 try:
                     result = future.result()
                     if result:
-                        element_nodes, scroll_nodes, info_nodes = result
+                        element_nodes, scroll_nodes, result_ordered = result
                         interactive_nodes.extend(element_nodes)
                         scrollable_nodes.extend(scroll_nodes)
-                        dom_informative_nodes.extend(info_nodes)
+                        ordered_nodes.extend(result_ordered)
                 except Exception as e:
                     retry_counts[bundle_id] = retry_counts.get(bundle_id, 0) + 1
                     logger.debug(
@@ -142,7 +144,7 @@ class Tree:
                             e,
                             exc_info=True,
                         )
-        return interactive_nodes, scrollable_nodes, dom_informative_nodes
+        return interactive_nodes, scrollable_nodes, ordered_nodes
 
     def get_nodes(
         self, bundle_id: str, is_browser: bool, desktop_only: bool = False
@@ -168,7 +170,7 @@ class Tree:
         app_name = app.Name or bundle_id
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
-        dom_informative_nodes: list[TextElementNode] = []
+        ordered_nodes: list = []
 
         if not desktop_only:
             if menubar := app.MenuBar:
@@ -199,7 +201,7 @@ class Tree:
                     app_name,
                     interactive_nodes,
                     scrollable_nodes,
-                    dom_informative_nodes,
+                    ordered_nodes,
                     main_window_bounding_box=main_window_bounding_box,
                     is_browser=is_browser,
                 )
@@ -226,7 +228,7 @@ class Tree:
                         app_name,
                         interactive_nodes,
                         scrollable_nodes,
-                        dom_informative_nodes,
+                        ordered_nodes,
                         main_window_bounding_box=window_bbox,
                         is_browser=is_browser,
                     )
@@ -237,10 +239,10 @@ class Tree:
                         app_name,
                         interactive_nodes,
                         scrollable_nodes,
-                        dom_informative_nodes,
+                        ordered_nodes,
                         is_browser=is_browser,
                     )
-        return interactive_nodes, scrollable_nodes, dom_informative_nodes
+        return interactive_nodes, scrollable_nodes, ordered_nodes
 
     def iou_bounding_box(
         self, window_box: BoundingBox, element_box: BoundingBox
@@ -346,27 +348,6 @@ class Tree:
                         metadata=metadata,
                     )
                 )
-        elif role == "AXButton":
-            subrole = attrs["subrole"]
-            if subrole in WINDOW_CONTROL_SUBROLES:
-                node = interactive_nodes.pop()
-                metadata = node.metadata
-                element_bounding_box = BoundingBox.from_bounding_rectangle(rect)
-                if main_window_bounding_box:
-                    element_bounding_box = self.iou_bounding_box(
-                        main_window_bounding_box, element_bounding_box
-                    )
-                center = element_bounding_box.get_center()
-                interactive_nodes.append(
-                    TreeElementNode(
-                        bounding_box=element_bounding_box,
-                        center=center,
-                        name=WINDOW_CONTROL_SUBROLES[subrole] or "",
-                        control_type=role,
-                        window_name=window_name,
-                        metadata=metadata,
-                    )
-                )
 
     def tree_traversal(
         self,
@@ -374,7 +355,7 @@ class Tree:
         window_name: str,
         interactive_nodes: list[TreeElementNode],
         scrollable_nodes: list[ScrollElementNode],
-        dom_informative_nodes: list[TextElementNode],
+        ordered_nodes: list,
         main_window_bounding_box: BoundingBox | None = None,
         is_browser: bool = False,
     ) -> None:
@@ -386,10 +367,10 @@ class Tree:
           Phase 2 (interactive elements only, ~5-10%): 9 display/metadata attributes.
         This avoids marshalling string attributes for the ~90% of non-interactive nodes.
         """
-        stack = deque([(root_control.Element, is_browser)])
+        stack = deque([(root_control.Element, is_browser, False)])
 
         while stack:
-            element, current_is_browser = stack.pop()
+            element, current_is_browser, skip_text = stack.pop()
 
             # --- Phase 1: minimal batch for all elements ---
             early = ax.GetEarlyTraversalBatch(element)
@@ -403,7 +384,7 @@ class Tree:
 
             if rect is None:
                 for child_element in reversed(children):
-                    stack.append((child_element, current_is_browser))
+                    stack.append((child_element, current_is_browser, skip_text))
                 continue
 
             is_visible = rect.width > 1 and rect.height > 1
@@ -424,7 +405,21 @@ class Tree:
                 if bounding_box.width == 0 or bounding_box.height == 0:
                     continue
 
-            if is_interactive:
+            if role in TEXT_ROLES and is_visible and not skip_text:
+                text_attrs = ax.GetMultipleAttributeValues(
+                    element,
+                    [ax.Attribute.Value, ax.Attribute.Title, ax.Attribute.Description],
+                )
+                text = (
+                    text_attrs.get(ax.Attribute.Value)
+                    or text_attrs.get(ax.Attribute.Title)
+                    or text_attrs.get(ax.Attribute.Description)
+                    or ""
+                )
+                if text:
+                    ordered_nodes.append(TextElementNode(text=text, window_name=window_name))
+
+            if is_interactive and role not in TEXT_ROLES:
                 # --- Phase 2: display/metadata attributes, only for interactive elements ---
                 late = ax.GetLateTraversalBatch(element)
 
@@ -503,7 +498,26 @@ class Tree:
                         metadata=metadata,
                     )
                 )
-                if current_is_browser:
+                # Window controls are always native macOS UI — apply regardless of browser flag
+                if role == "AXButton" and attrs.get("subrole") in WINDOW_CONTROL_SUBROLES:
+                    subrole = attrs["subrole"]
+                    node = interactive_nodes.pop()
+                    element_bounding_box = BoundingBox.from_bounding_rectangle(attrs["rect"])
+                    if main_window_bounding_box:
+                        element_bounding_box = self.iou_bounding_box(
+                            main_window_bounding_box, element_bounding_box
+                        )
+                    interactive_nodes.append(
+                        TreeElementNode(
+                            bounding_box=element_bounding_box,
+                            center=element_bounding_box.get_center(),
+                            name=WINDOW_CONTROL_SUBROLES[subrole],
+                            control_type=role,
+                            window_name=window_name,
+                            metadata=node.metadata,
+                        )
+                    )
+                elif current_is_browser:
                     self._dom_correction(
                         attrs, interactive_nodes, window_name, main_window_bounding_box
                     )
@@ -511,6 +525,7 @@ class Tree:
                     self._desktop_correction(
                         attrs, interactive_nodes, window_name, main_window_bounding_box
                     )
+                ordered_nodes.append(interactive_nodes[-1])
 
             if role in SCROLLABLE_ROLES and is_visible:
                 first_child = children[0] if children else None
@@ -529,4 +544,4 @@ class Tree:
                 )
 
             for child_element in reversed(children):
-                stack.append((child_element, current_is_browser))
+                stack.append((child_element, current_is_browser, skip_text or role in TEXT_OWNING_ROLES))
