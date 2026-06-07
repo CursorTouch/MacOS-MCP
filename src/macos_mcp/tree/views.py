@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Any
+import math
 import json
 
 WARNING_MESSAGE = "The desktop UI services are temporarily unavailable. Please wait a few seconds and continue."
@@ -69,13 +70,15 @@ class BoundingBox:
 
     @classmethod
     def from_bounding_rectangle(cls, bounding_rectangle: "Rect") -> "BoundingBox":
+        def _safe_int(v: float) -> int:
+            return 0 if (math.isinf(v) or math.isnan(v)) else int(v)
         return cls(
-            left=int(bounding_rectangle.left),
-            top=int(bounding_rectangle.top),
-            right=int(bounding_rectangle.right),
-            bottom=int(bounding_rectangle.bottom),
-            width=int(bounding_rectangle.width),
-            height=int(bounding_rectangle.height),
+            left=_safe_int(bounding_rectangle.left),
+            top=_safe_int(bounding_rectangle.top),
+            right=_safe_int(bounding_rectangle.right),
+            bottom=_safe_int(bounding_rectangle.bottom),
+            width=_safe_int(bounding_rectangle.width),
+            height=_safe_int(bounding_rectangle.height),
         )
 
     def get_center(self) -> "Center":
