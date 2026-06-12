@@ -384,8 +384,15 @@ class EventObserver:
         """Main event loop running in a dedicated thread."""
         try:
             while self._running.is_set():
-                self._update_observers()
-                CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, False)
+                # This loop runs on a secondary thread, where PyObjC does not
+                # install an autorelease pool automatically. Without draining a
+                # pool each iteration, autoreleased Objective-C objects created
+                # by the NSWorkspace/AX calls below (and by the AX notification
+                # callbacks dispatched from CFRunLoopRunInMode) accumulate for
+                # the lifetime of the process, causing steady memory growth.
+                with objc.autorelease_pool():
+                    self._update_observers()
+                    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, False)
         except Exception as e:
             logger.error(f"EventObserver died: {e}")
         finally:

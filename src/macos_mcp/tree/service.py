@@ -17,6 +17,7 @@ from macos_mcp.desktop.config import BROWSER_BUNDLE_IDS, SYSTEM_UI_BUNDLE_IDS
 from macos_mcp.desktop.views import Window
 import macos_mcp.ax as ax
 import logging
+import objc
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,9 @@ class Tree:
         retry_counts: dict[str, int] = {bid: 0 for bid, _, __ in task_inputs}
         future_to_bundle_id: dict = {}
         for bid, is_browser, desktop_only in task_inputs:
-            future = executor.submit(self.get_nodes, bid, is_browser, desktop_only)
+            future = executor.submit(
+                self._get_nodes_pooled, bid, is_browser, desktop_only
+            )
             future_to_bundle_id[future] = bid
 
         while future_to_bundle_id:
@@ -131,7 +134,7 @@ class Tree:
                             (do for b, _, do in task_inputs if b == bundle_id), False
                         )
                         new_future = executor.submit(
-                            self.get_nodes, bundle_id, is_browser, desktop_only
+                            self._get_nodes_pooled, bundle_id, is_browser, desktop_only
                         )
                         future_to_bundle_id[new_future] = bundle_id
                     else:
@@ -143,6 +146,20 @@ class Tree:
                             exc_info=True,
                         )
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
+
+    def _get_nodes_pooled(
+        self, bundle_id: str, is_browser: bool, desktop_only: bool = False
+    ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
+        """Run get_nodes inside an autorelease pool on the worker thread.
+
+        get_nodes executes on the shared ThreadPoolExecutor's worker threads.
+        PyObjC only installs an NSAutoreleasePool automatically on the main
+        thread, so without draining a pool per task the autoreleased
+        Objective-C objects created during AX traversal accumulate for the
+        lifetime of these long-lived worker threads (a steady memory leak).
+        """
+        with objc.autorelease_pool():
+            return self.get_nodes(bundle_id, is_browser, desktop_only)
 
     def get_nodes(
         self, bundle_id: str, is_browser: bool, desktop_only: bool = False
