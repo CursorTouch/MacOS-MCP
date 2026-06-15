@@ -1821,9 +1821,9 @@ def ExecuteCommand(
     env = os.environ.copy()
     try:
         if mode == "osascript":
-            escaped_command = command.replace('"', '\\"')
             result = subprocess.run(
-                ["osascript", "-e", escaped_command],
+                ["osascript"],
+                input=command,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
