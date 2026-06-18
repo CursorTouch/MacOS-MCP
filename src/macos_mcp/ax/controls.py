@@ -442,7 +442,7 @@ class Control:
         """Get the containing window element."""
         window = GetAttribute(self.Element, Attribute.Window)
         if window:
-            return CreateControl(window)  # type: ignore[return-value]
+            return WindowControl(element=window)
         return None
 
     @property
@@ -493,7 +493,7 @@ class Control:
         """Get the focused window of this application element."""
         window = GetAttribute(self.Element, Attribute.FocusedWindow)
         if window:
-            return CreateControl(window)  # type: ignore[return-value]
+            return WindowControl(element=window)
         return None
 
     @property
@@ -501,7 +501,7 @@ class Control:
         """Get the main window of this application element."""
         window = GetAttribute(self.Element, Attribute.MainWindow)
         if window:
-            return CreateControl(window)  # type: ignore[return-value]
+            return WindowControl(element=window)
         return None
 
     @property
@@ -509,7 +509,7 @@ class Control:
         """Get all windows of this application element."""
         windows = GetAttribute(self.Element, Attribute.Windows)
         if windows:
-            return [CreateControl(w) for w in windows]  # type: ignore[misc]
+            return [WindowControl(element=w) for w in windows]
         return []
 
     @property
@@ -1434,7 +1434,7 @@ class ApplicationControl(Control):
         """Get the focused window of this application element."""
         window = GetAttribute(self.Element, Attribute.FocusedWindow)
         if window:
-            return CreateControl(window)  # type: ignore[return-value]
+            return WindowControl(element=window)
         return None
 
     @property
@@ -1442,7 +1442,7 @@ class ApplicationControl(Control):
         """Get the main window of this application element."""
         window = GetAttribute(self.Element, Attribute.MainWindow)
         if window:
-            return CreateControl(window)  # type: ignore[return-value]
+            return WindowControl(element=window)
         return None
 
     @property
@@ -1450,7 +1450,7 @@ class ApplicationControl(Control):
         """Get all windows of this application element."""
         windows = GetAttribute(self.Element, Attribute.Windows)
         if windows:
-            return [CreateControl(w) for w in windows]  # type: ignore[misc]
+            return [WindowControl(element=w) for w in windows]
         return []
 
     @property
