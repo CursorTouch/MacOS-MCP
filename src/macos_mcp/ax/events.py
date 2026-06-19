@@ -380,9 +380,16 @@ class EventObserver:
                     observer.stop()
                 self._observed_pids.add(pid)
 
+    # How often to re-scan running apps (seconds). Apps don't launch or quit
+    # often, so calling NSWorkspace.runningApplications() on every loop
+    # iteration just wastes CPU; the AX run loop below still wakes immediately
+    # on notifications regardless of this cadence.
+    _refresh_interval = 2.0
+
     def _run(self) -> None:
         """Main event loop running in a dedicated thread."""
         try:
+            last_refresh = 0.0
             while self._running.is_set():
                 # This loop runs on a secondary thread, where PyObjC does not
                 # install an autorelease pool automatically. Without draining a
@@ -391,7 +398,10 @@ class EventObserver:
                 # callbacks dispatched from CFRunLoopRunInMode) accumulate for
                 # the lifetime of the process, causing steady memory growth.
                 with objc.autorelease_pool():
-                    self._update_observers()
+                    now = time.time()
+                    if now - last_refresh >= self._refresh_interval:
+                        self._update_observers()
+                        last_refresh = now
                     CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, False)
         except Exception as e:
             logger.error(f"EventObserver died: {e}")
