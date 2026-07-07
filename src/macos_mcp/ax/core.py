@@ -936,6 +936,62 @@ def GetPerDisplayInfo() -> list[dict]:
 # =============================================================================
 
 
+def _capture_screen_via_screencapture(rect=None):
+    """
+    Fallback capture using /usr/sbin/screencapture.
+
+    CGWindowListCreateImage is deprecated since macOS 14.4 and returns NULL
+    on macOS 15+ (Sequoia and later) even when Screen Recording permission is
+    granted, because Apple requires ScreenCaptureKit for direct CG capture.
+    The screencapture CLI still works and inherits the host app's TCC grant.
+
+    Returns a CGImage, or None on failure.
+    """
+    import os
+    import subprocess
+    import tempfile
+
+    import Foundation
+
+    fd, tmp_path = tempfile.mkstemp(suffix=".png")
+    os.close(fd)
+    try:
+        cmd = ["/usr/sbin/screencapture", "-x"]
+        if rect is not None:
+            try:
+                if Quartz.CGRectIsInfinite(rect) is not True:
+                    cmd += [
+                        "-R",
+                        "{},{},{},{}".format(
+                            int(rect.origin.x),
+                            int(rect.origin.y),
+                            int(rect.size.width),
+                            int(rect.size.height),
+                        ),
+                    ]
+            except Exception:
+                pass
+        cmd.append(tmp_path)
+        subprocess.run(cmd, check=True, capture_output=True)
+        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+            logger.error("Fallback screencapture produced an empty file")
+            return None
+        url = Foundation.NSURL.fileURLWithPath_(tmp_path)
+        source = Quartz.CGImageSourceCreateWithURL(url, None)
+        if source is None:
+            logger.error("Fallback screencapture: could not read captured PNG")
+            return None
+        return Quartz.CGImageSourceCreateImageAtIndex(source, 0, None)
+    except Exception as e:
+        logger.error(f"Fallback screenshot capture failed: {e}")
+        return None
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
 def CaptureScreen(rect=None):
     """
     Capture a screenshot of the screen.
@@ -952,10 +1008,15 @@ def CaptureScreen(rect=None):
             kCGNullWindowID,
             kCGWindowImageDefault,
         )
-        return cg_image
+        if cg_image is not None:
+            return cg_image
+        logger.warning(
+            "CGWindowListCreateImage returned None (deprecated on macOS 15+); "
+            "falling back to screencapture CLI"
+        )
     except Exception as e:
-        logger.error(f"Screenshot capture failed: {e}")
-        return None
+        logger.error(f"Screenshot capture failed: {e}; trying fallback")
+    return _capture_screen_via_screencapture(rect)
 
 
 def CGImageToPIL(cg_image):
