@@ -1340,7 +1340,7 @@ wheels = [
 
 [[package]]
 name = "macos-mcp"
-version = "0.3.5"
+version = "0.3.8"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

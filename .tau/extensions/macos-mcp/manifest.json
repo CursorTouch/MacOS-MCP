@@ -1,0 +1,6 @@
+{
+  "tau": {
+    "extensions": ["./main.py"],
+    "dependencies": ["mcp>=1.0.0"]
+  }
+}

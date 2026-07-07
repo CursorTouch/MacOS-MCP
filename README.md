@@ -233,6 +233,49 @@ The `Snapshot` tool requires Screen Recording permissions to capture screenshots
 </details>
 
 <details>
+  <summary><strong>Tau Coding Agent</strong></summary>
+
+  Tau does not ship with built-in MCP support. This repo includes a project-local Tau extension at `.tau/extensions/macos-mcp/` that starts the macOS-MCP server over stdio and exposes Tau-native tools that wrap the existing macOS-MCP tools.
+
+  **Local checkout setup:**
+
+  ```shell
+  git clone https://github.com/CursorTouch/MacOS-MCP.git
+  cd MacOS-MCP
+  uv sync
+  tau
+  ```
+
+  Tau auto-discovers project extensions under `.tau/extensions/*/` when run from the checkout, and installs the extension's own dependencies (declared in `manifest.json`) automatically on first load. If Tau is already running, use `/reload`.
+
+  If you copied only the extension into another Tau project, run Tau from the macOS-MCP checkout or set:
+
+  ```shell
+  export MACOS_MCP_ROOT=/path/to/MacOS-MCP
+  ```
+
+  The extension exposes these Tau tools:
+
+  | Tau Tool | Purpose |
+  |----------|---------|
+  | `mac_snapshot` | Read current macOS UI state through the existing Snapshot tool. |
+  | `mac_app` | Launch, switch, or resize macOS applications/windows. |
+  | `mac_click` | Click coordinates returned by `mac_snapshot`. |
+  | `mac_type` | Type text at coordinates returned by `mac_snapshot`. |
+  | `mac_shortcut` | Run keyboard shortcuts such as `command+c` or `command+space`. |
+  | `mac_scroll` | Scroll at the current pointer or coordinates. |
+  | `mac_wait` | Wait for UI changes/loading. |
+
+  Recommended agent workflow:
+  - Call `mac_snapshot` first.
+  - Use the coordinates returned by Snapshot with `mac_click`, `mac_type`, and `mac_scroll`.
+  - Use screenshots/vision only when Accessibility data is missing or ambiguous.
+
+  The extension auto-detects the macOS-MCP checkout. If you use a manually copied extension, set `MACOS_MCP_ROOT=/path/to/MacOS-MCP`.
+
+</details>
+
+<details>
   <summary><strong>Other Integrations</strong></summary>
 
   Any client supporting the Model Context Protocol can integrate macOS-MCP by configuring the `uvx macos-mcp` command in their MCP server settings.

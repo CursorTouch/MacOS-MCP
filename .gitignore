@@ -9,3 +9,4 @@ experiments
 node_modules
 dist/
 *.egg-info/
+.tau/extensions/macos-mcp/server.log
