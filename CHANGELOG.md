@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-07-08
+
+### Fixed
+- Auto-register process for Accessibility permission via native `AXIsProcessTrustedWithOptions` prompt on startup, working around uv-managed Python interpreter binaries appearing greyed out/unselectable in the System Settings "+" picker (#22)
+
 ## [0.3.9] - 2026-07-07
 
 ### Added
@@ -45,5 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UI state capture and interactive element extraction
 - AppleScript execution support
 
+[0.3.10]: https://github.com/Jeomon/MacOS-MCP/compare/v0.3.9...v0.3.10
 [0.3.9]: https://github.com/Jeomon/MacOS-MCP/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/Jeomon/MacOS-MCP/releases/tag/v0.3.8
