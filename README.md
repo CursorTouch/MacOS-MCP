@@ -102,6 +102,10 @@ macOS-MCP requires **Accessibility** and **Screen Recording** permissions to fun
 
 **For `uvx` users:** Grant permissions to your terminal application and Python, as `uvx` runs Python packages from UV's cache.
 
+**If the interpreter binary is greyed out / unselectable in the "+" picker** (a known issue with UV-managed Python symlinks, e.g. `.venv/bin/python3.12` → `~/.local/share/uv/python/...`): don't try to add it manually. Instead, just start the server — since v0.3.10 it calls `AXIsProcessTrustedWithOptions` with the prompt option on startup, which asks macOS to show its native consent dialog and auto-register the running process for you. Approve that dialog and restart the server.
+
+If you're launched as a subprocess by a parent that already holds Accessibility access (e.g. certain Claude Desktop configurations), and permission checks still fail spuriously, set `MACOS_MCP_SKIP_PERMISSION_CHECK=1` to downgrade the check to a warning instead of exiting.
+
 #### Screen Recording Permissions
 
 The `Snapshot` tool requires Screen Recording permissions to capture screenshots:

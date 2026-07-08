@@ -10,15 +10,29 @@ from typing import Tuple
 logger = logging.getLogger(__name__)
 
 
-def check_accessibility_permission() -> bool:
+def check_accessibility_permission(prompt: bool = False) -> bool:
     """
     Check if Accessibility permission is granted.
+
+    Args:
+        prompt: If True, ask macOS to prompt the user for consent and
+            auto-register this process in the Accessibility list via
+            AXIsProcessTrustedWithOptions. This avoids requiring the user to
+            manually locate and add the running interpreter binary (e.g. a
+            uv-managed Python symlink) with the System Settings "+" picker,
+            which can appear greyed out / unselectable for such binaries.
 
     Returns:
         True if permission is granted, False otherwise.
     """
     try:
-        from ApplicationServices import AXIsProcessTrusted
+        from ApplicationServices import AXIsProcessTrusted, AXIsProcessTrustedWithOptions
+
+        if prompt:
+            from CoreFoundation import kCFBooleanTrue
+
+            options = {"AXTrustedCheckOptionPrompt": kCFBooleanTrue}
+            return AXIsProcessTrustedWithOptions(options)
 
         return AXIsProcessTrusted()
     except Exception as e:
@@ -48,12 +62,19 @@ def check_screen_recording_permission() -> bool:
 
 def request_permissions() -> Tuple[bool, bool]:
     """
-    Request missing permissions by opening System Preferences.
+    Request missing permissions.
+
+    For Accessibility, this first tries AXIsProcessTrustedWithOptions with the
+    prompt flag set, which asks macOS to show its native consent dialog and
+    auto-register the running process in the Accessibility list. This is more
+    reliable than requiring the user to manually add the process via the
+    System Settings "+" file picker, which can reject or grey out binaries
+    like uv-managed Python interpreters (symlinks into ~/.local/share/uv/...).
 
     Returns:
         Tuple of (accessibility_granted, screen_recording_granted)
     """
-    accessibility_ok = check_accessibility_permission()
+    accessibility_ok = check_accessibility_permission(prompt=True)
     screen_recording_ok = check_screen_recording_permission()
 
     if not accessibility_ok or not screen_recording_ok:
