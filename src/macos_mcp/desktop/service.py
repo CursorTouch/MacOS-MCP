@@ -114,12 +114,13 @@ class Desktop:
         import subprocess
 
         script = (
-            f"display notification {json.dumps(message)} with title {json.dumps(title)}"
+            f"display notification {json.dumps(message, ensure_ascii=False)}"
+            f" with title {json.dumps(title, ensure_ascii=False)}"
         )
         if subtitle:
-            script += f" subtitle {json.dumps(subtitle)}"
+            script += f" subtitle {json.dumps(subtitle, ensure_ascii=False)}"
         if sound:
-            script += f" sound name {json.dumps(sound)}"
+            script += f" sound name {json.dumps(sound, ensure_ascii=False)}"
         result = subprocess.run(
             ["osascript", "-e", script], capture_output=True, text=True
         )
