@@ -332,6 +332,19 @@ class TestDesktopNotify:
         result = desktop.notify("Message")
         assert "Failed to send notification" in result
 
+    def test_notify_non_ascii(self, mocker):
+        """Non-ASCII text must be emitted as raw UTF-8, not \\uXXXX escapes,
+        since AppleScript string literals don't support unicode escapes."""
+        mock_run = mocker.patch("subprocess.run", return_value=MagicMock(returncode=0))
+        desktop = Desktop()
+        result = desktop.notify("通知测试", title="タイトル")
+        assert "Notification sent" in result
+        call_args = mock_run.call_args[0][0]
+        script = call_args[2]
+        assert "通知测试" in script
+        assert "タイトル" in script
+        assert "\\u" not in script
+
 
 @pytest.mark.unit
 class TestDesktopScrape:

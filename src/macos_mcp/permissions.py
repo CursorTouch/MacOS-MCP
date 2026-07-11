@@ -60,7 +60,7 @@ def check_screen_recording_permission() -> bool:
         return False
 
 
-def request_permissions() -> Tuple[bool, bool]:
+def request_permissions(open_settings: bool = True) -> Tuple[bool, bool]:
     """
     Request missing permissions.
 
@@ -70,6 +70,14 @@ def request_permissions() -> Tuple[bool, bool]:
     reliable than requiring the user to manually add the process via the
     System Settings "+" file picker, which can reject or grey out binaries
     like uv-managed Python interpreters (symlinks into ~/.local/share/uv/...).
+
+    Args:
+        open_settings: If True (default), open System Preferences to the
+            Privacy & Security pane when permissions are missing. Set to
+            False to suppress this — e.g. when the check itself is expected
+            to be unreliable (MACOS_MCP_SKIP_PERMISSION_CHECK=1), where
+            popping System Preferences on every server start would just
+            steal focus without being actionable.
 
     Returns:
         Tuple of (accessibility_granted, screen_recording_granted)
@@ -84,19 +92,22 @@ def request_permissions() -> Tuple[bool, bool]:
         if not screen_recording_ok:
             missing.append("Screen Recording")
 
-        logger.warning(
-            f"Missing permissions: {', '.join(missing)}. "
-            "Opening System Preferences. Please grant permissions and restart."
-        )
+        if open_settings:
+            logger.warning(
+                f"Missing permissions: {', '.join(missing)}. "
+                "Opening System Preferences. Please grant permissions and restart."
+            )
 
-        # Open System Preferences to Privacy & Security
-        subprocess.run(
-            [
-                "open",
-                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-            ],
-            timeout=5,
-        )
+            # Open System Preferences to Privacy & Security
+            subprocess.run(
+                [
+                    "open",
+                    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+                ],
+                timeout=5,
+            )
+        else:
+            logger.warning(f"Missing permissions: {', '.join(missing)}.")
 
     return accessibility_ok, screen_recording_ok
 
@@ -115,7 +126,7 @@ def validate_permissions() -> None:
 
     skip = os.environ.get("MACOS_MCP_SKIP_PERMISSION_CHECK", "0") == "1"
 
-    accessibility_ok, screen_recording_ok = request_permissions()
+    accessibility_ok, screen_recording_ok = request_permissions(open_settings=not skip)
 
     if not accessibility_ok or not screen_recording_ok:
         missing = []

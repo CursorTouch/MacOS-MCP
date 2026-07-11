@@ -158,6 +158,26 @@ class TestRequestPermissions:
         assert screen_recording is False
         mock_open.assert_called_once()
 
+    def test_open_settings_false_suppresses_system_preferences(self, mocker):
+        """When open_settings=False, missing permissions must not pop System
+        Preferences — used for MACOS_MCP_SKIP_PERMISSION_CHECK=1 so the
+        server doesn't steal focus on every start when the check itself is
+        known to be unreliable (e.g. under Claude Desktop's disclaimed
+        subprocess launcher)."""
+        mocker.patch("macos_mcp.permissions.check_accessibility_permission", return_value=False)
+        mocker.patch(
+            "macos_mcp.permissions.check_screen_recording_permission", return_value=False
+        )
+        mock_open = mocker.patch("subprocess.run")
+
+        from macos_mcp.permissions import request_permissions
+
+        accessibility, screen_recording = request_permissions(open_settings=False)
+
+        assert accessibility is False
+        assert screen_recording is False
+        mock_open.assert_not_called()
+
 
 @pytest.mark.unit
 class TestValidatePermissions:
@@ -206,3 +226,22 @@ class TestValidatePermissions:
         validate_permissions()
 
         mock_exit.assert_called_once_with(1)
+
+    def test_validation_skip_env_warns_instead_of_exiting(self, mocker):
+        """MACOS_MCP_SKIP_PERMISSION_CHECK=1 downgrades a failed check to a
+        warning (server keeps starting) and must ask request_permissions to
+        suppress the System Preferences popup, since the underlying
+        AXIsProcessTrusted() check is known-unreliable in that scenario
+        (disclaimed subprocess launcher, e.g. Claude Desktop)."""
+        mock_request = mocker.patch(
+            "macos_mcp.permissions.request_permissions", return_value=(False, False)
+        )
+        mock_exit = mocker.patch("sys.exit")
+        mocker.patch.dict("os.environ", {"MACOS_MCP_SKIP_PERMISSION_CHECK": "1"})
+
+        from macos_mcp.permissions import validate_permissions
+
+        validate_permissions()
+
+        mock_exit.assert_not_called()
+        mock_request.assert_called_once_with(open_settings=False)

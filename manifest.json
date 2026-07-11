@@ -22,7 +22,10 @@
         "run",
         "macos-mcp",
         "serve"
-      ]
+      ],
+      "env": {
+        "MACOS_MCP_SKIP_PERMISSION_CHECK": "1"
+      }
     }
   },
   "tools": [

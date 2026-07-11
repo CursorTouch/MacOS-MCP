@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Notification tool no longer fails for non-ASCII text (CJK, emoji): pass `ensure_ascii=False` to `json.dumps` when building the `display notification` AppleScript, since AppleScript string literals don't support `\uXXXX` escapes (#27)
+- Extension no longer exits at startup under Claude Desktop: `manifest.json`/`server.json` now set `MACOS_MCP_SKIP_PERMISSION_CHECK=1` by default so the published extension can reach the existing warn-instead-of-exit escape hatch when `AXIsProcessTrustedWithOptions()` reports false for a disclaimed subprocess even though the host's own grant is inherited; skip mode also suppresses the focus-stealing System Preferences popup (#26)
+
 ## [0.3.10] - 2026-07-08
 
 ### Fixed
