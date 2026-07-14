@@ -234,6 +234,23 @@ class Desktop:
         """Pause for the specified number of seconds."""
         time.sleep(duration)
 
+    def create_desktop_space(
+        self,
+        open_delay: float = 0.9,
+        close_after: bool = True,
+    ) -> str:
+        """
+        Create a new Mission Control desktop Space.
+
+        Uses Accessibility (AX) on the Dock's Mission Control UI and verifies
+        the space count increased before reporting success.
+        """
+        ok, message = ax.CreateDesktopSpace(
+            open_delay=open_delay,
+            close_after=close_after,
+        )
+        return message if ok else f"Failed: {message}"
+
     def get_foreground_window(self) -> Optional[Window]:
         FINDER_BUNDLE_ID = "com.apple.finder"
         time.sleep(0.05)

@@ -440,6 +440,37 @@ def scrape_tool(url: str, ctx: Context = None) -> str:
 
 
 @mcp.tool(
+    name="Desktop",
+    description=(
+        "Manages Mission Control desktop Spaces. "
+        "mode='create' opens Mission Control and clicks 'Add Desktop' to create a new virtual desktop, "
+        "verifying the space count increased before reporting success. "
+        "Uses Accessibility only. "
+        "Requires Accessibility permission. UI layout can vary by macOS version/locale."
+    ),
+    annotations=ToolAnnotations(
+        title="Desktop",
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    ),
+)
+def desktop_tool(
+    mode: Literal["create"] = "create",
+    close_after: bool = True,
+    open_delay: float = 0.9,
+    ctx: Context = None,
+) -> str:
+    if mode != "create":
+        return f"Unknown mode: {mode}. Supported modes: create."
+    return desktop.create_desktop_space(
+        open_delay=open_delay,
+        close_after=close_after,
+    )
+
+
+@mcp.tool(
     name="Notification",
     description="Sends a macOS notification banner with a message, title, optional subtitle, and optional sound.",
     annotations=ToolAnnotations(

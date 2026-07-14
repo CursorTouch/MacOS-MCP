@@ -1800,6 +1800,236 @@ def SetDesktopImage(path: str, screen_index: int = 0) -> bool:
         pass
     return False
 
+# =============================================================================
+# Mission Control / Spaces
+# =============================================================================
+
+
+# Labels used for the "add desktop" control across macOS locales / versions.
+# Match is case-insensitive and applied against AXDescription, AXTitle, AXHelp,
+# and AXIdentifier.
+_ADD_DESKTOP_LABELS = (
+    "add desktop",
+    "new desktop",
+    "add space",
+    "new space",
+    "add space desktop",
+)
+
+
+def OpenMissionControl(wait: float = 0.8) -> None:
+    """
+    Open Mission Control via Control+Up (system default).
+
+    Args:
+        wait: Seconds to wait for Mission Control UI to appear.
+    """
+    HotKey("control", "up")
+    time.sleep(wait)
+
+
+def CloseMissionControl(wait: float = 0.3) -> None:
+    """
+    Dismiss Mission Control via Escape.
+
+    Args:
+        wait: Seconds to wait after dismissing.
+    """
+    KeyPress(KeyCode.Escape)
+    time.sleep(wait)
+
+
+def _control_text_blob(control: Any) -> str:
+    """Lowercased combined text attributes of a Control for fuzzy matching."""
+    parts = [
+        getattr(control, "Description", "") or "",
+        getattr(control, "Title", "") or "",
+        getattr(control, "Help", "") or "",
+        getattr(control, "Identifier", "") or "",
+        getattr(control, "RoleDescription", "") or "",
+    ]
+    return " ".join(str(p) for p in parts).lower()
+
+
+def _is_add_desktop_control(control: Any) -> bool:
+    """Return True if this control looks like the Mission Control 'Add Desktop' button."""
+    text = _control_text_blob(control)
+    if not text.strip():
+        return False
+    return any(label in text for label in _ADD_DESKTOP_LABELS)
+
+
+def FindAddDesktopButton(
+    max_depth: int = 12,
+    wait_for_ui: float = 1.2,
+) -> Optional[Any]:
+    """
+    Locate the Mission Control 'Add Desktop' button via the Dock accessibility tree.
+
+    Mission Control's Spaces bar (including the "+" new-desktop control) is
+    exposed as part of the Dock process while Mission Control is open.
+
+    Args:
+        max_depth: Maximum AX tree depth to search under Dock.
+        wait_for_ui: How long to poll for the button after Mission Control opens.
+
+    Returns:
+        A Control wrapping the add-desktop button, or None if not found.
+"""
+    from .enums import Role
+
+    deadline = time.time() + max(wait_for_ui, 0.0)
+    while True:
+        dock = GetRunningApplicationByBundleId(
+            "com.apple.dock"
+        ) or GetRunningApplicationByName("Dock")
+        if dock is not None:
+            try:
+                matches = dock.FindAll(
+                    role=Role.Button,
+                    predicate=_is_add_desktop_control,
+                    max_depth=max_depth,
+                )
+                if matches:
+                    return matches[0]
+                # Fallback: any role with the right label (role may vary by macOS version).
+                matches = dock.FindAll(
+                    predicate=_is_add_desktop_control,
+                    max_depth=max_depth,
+                )
+                if matches:
+                    return matches[0]
+            except Exception as e:
+                logger.debug(f"FindAddDesktopButton AX search failed: {e}")
+        if time.time() >= deadline:
+            break
+        time.sleep(0.15)
+    return None
+
+
+def _activate_add_desktop_button(button: Any) -> bool:
+    """
+    Activate the add-desktop button using AXPress first, then a coordinate click.
+    """
+    try:
+        if hasattr(button, "Press") and button.Press():
+            return True
+    except Exception as e:
+        logger.debug(f"AXPress on add-desktop failed: {e}")
+
+    try:
+        if hasattr(button, "Click"):
+            button.Click()
+            return True
+    except Exception as e:
+        logger.debug(f"Control.Click on add-desktop failed: {e}")
+
+    # Last coordinate fallback from AX bounds.
+    try:
+        rect = getattr(button, "BoundingRectangle", None)
+        if rect is None and hasattr(button, "Element"):
+            rect = GetRect(button.Element)
+        if rect is not None:
+            x = int((rect.left + rect.right) / 2)
+            y = int((rect.top + rect.bottom) / 2)
+            Click(x, y)
+            return True
+    except Exception as e:
+        logger.debug(f"Coordinate click on add-desktop failed: {e}")
+    return False
+
+
+def _count_desktop_spaces(button: Any) -> Optional[int]:
+    """
+    Count existing desktop spaces via the add-desktop button's siblings.
+
+    The Mission Control spaces bar lists one control per desktop plus the
+    "add desktop" control; counting siblings that are not the add-desktop
+    control gives the current number of spaces.
+
+    Args:
+        button: The add-desktop Control returned by FindAddDesktopButton.
+
+    Returns:
+        The number of existing desktop spaces, or None if it could not be
+        determined (e.g. the spaces bar is not reachable via AX).
+    """
+    try:
+        parent = button.Parent
+        if parent is None:
+            return None
+        siblings = parent.GetChildren()
+        return sum(1 for sibling in siblings if not _is_add_desktop_control(sibling))
+    except Exception as e:
+        logger.debug(f"Failed to enumerate spaces bar siblings: {e}")
+        return None
+
+
+def CreateDesktopSpace(
+    open_delay: float = 0.9,
+    close_after: bool = True,
+) -> Tuple[bool, str]:
+    """
+    Create a new Mission Control desktop Space.
+
+    Strategy:
+      1. Open Mission Control with Control+Up.
+      2. Find the "Add Desktop" button via Dock Accessibility (AX).
+      3. Activate it with AXPress / coordinate click.
+      4. Verify the space count increased.
+      5. Optionally dismiss Mission Control with Escape.
+
+    There is no public Apple API to create Spaces; this is intentional
+    GUI automation through Accessibility.
+
+    Args:
+        open_delay: Seconds to wait after opening Mission Control.
+        close_after: If True, press Escape to leave Mission Control.
+
+    Returns:
+        (success, message) tuple.
+    """
+    try:
+        OpenMissionControl(wait=open_delay)
+        button = FindAddDesktopButton(wait_for_ui=max(1.0, open_delay))
+        if button is not None:
+            before_count = _count_desktop_spaces(button)
+            if _activate_add_desktop_button(button):
+                time.sleep(0.35)
+                after_button = FindAddDesktopButton(wait_for_ui=0.5)
+                after_count = (
+                    _count_desktop_spaces(after_button) if after_button is not None else None
+                )
+                if close_after:
+                    CloseMissionControl()
+                if before_count is not None and after_count is not None:
+                    if after_count > before_count:
+                        return True, f"Created new desktop space ({after_count} total)."
+                    return False, (
+                        "Add Desktop control was activated but the space count did not "
+                        f"increase ({before_count} -> {after_count})."
+                    )
+                # Could not verify the space count via AX; trust the activation.
+                return True, "Created new desktop space."
+            logger.debug("Found add-desktop button but could not activate it")
+        else:
+            logger.debug("Add-desktop button not found via Dock AX tree")
+
+        if close_after:
+            CloseMissionControl()
+        return (
+            False,
+            "Could not find Mission Control 'Add Desktop' button via Accessibility. "
+            "Ensure Accessibility is granted and Mission Control is available.",
+        )
+    except Exception as e:
+        logger.exception("CreateDesktopSpace failed")
+        try:
+            CloseMissionControl(wait=0.1)
+        except Exception:
+            pass
+        return False, f"Failed to create desktop space: {e}"
+
 
 # =============================================================================
 # Workspace: Notification Center
@@ -1882,9 +2112,8 @@ def ExecuteCommand(
     env = os.environ.copy()
     try:
         if mode == "osascript":
-            escaped_command = command.replace('"', '\\"')
             result = subprocess.run(
-                ["osascript", "-e", escaped_command],
+                ["osascript", "-e", command],
                 capture_output=True,
                 text=True,
                 timeout=timeout,

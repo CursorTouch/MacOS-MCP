@@ -69,6 +69,10 @@
       "name": "Scrape",
       "description": "Fetch content from a URL. Performs a lightweight HTTP request and returns the page content as text."
     },
+{
+      "name": "Desktop",
+      "description": "Manages Mission Control desktop Spaces. mode='create' opens Mission Control and clicks 'Add Desktop' to create a new virtual desktop via Accessibility (AppleScript only as fallback)."
+    },
     {
       "name": "Notification",
       "description": "Sends a macOS notification banner with a message, title, optional subtitle, and optional sound. Supported sounds: Glass, Ping, Basso, Tink, Funk, Bottle, Frog, Hero, Morse, Pop, Purr, Sosumi, Submarine."

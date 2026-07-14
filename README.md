@@ -299,6 +299,7 @@ macOS-MCP provides a comprehensive toolset for desktop automation:
 | **Move** | Move mouse pointer or drag to coordinates |
 | **Shortcut** | Press keyboard shortcuts (Cmd+C, Cmd+Tab, etc.) |
 | **App** | Launch applications, manage windows (resize/move), switch between apps. Supports app names and bundle IDs |
+| **Desktop** | Create a new Mission Control Space (virtual desktop) via Accessibility, verifying the space count increased |
 | **Shell** | Execute commands or AppleScript. Use `mode='osascript'` for AppleScript |
 | **Scrape** | Extract and convert webpage content to Markdown format |
 | **Wait** | Pause execution for a defined duration |

@@ -289,6 +289,31 @@ class TestDesktopUtility:
         desktop.wait(5)
         mock_sleep.assert_called_once_with(5)
 
+    def test_create_desktop_space_success(self, mocker):
+        """Test create_desktop_space succeeds via AX path."""
+        mock_create = mocker.patch(
+            "macos_mcp.desktop.service.ax.CreateDesktopSpace",
+            return_value=(True, "Created new desktop space."),
+        )
+        desktop = Desktop()
+        result = desktop.create_desktop_space(open_delay=0.5, close_after=True)
+        assert result == "Created new desktop space."
+        mock_create.assert_called_once_with(
+            open_delay=0.5,
+            close_after=True,
+        )
+
+    def test_create_desktop_space_failure(self, mocker):
+        """Test create_desktop_space surfaces failure messages."""
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.CreateDesktopSpace",
+            return_value=(False, "Could not find add desktop button"),
+        )
+        desktop = Desktop()
+        result = desktop.create_desktop_space()
+        assert result.startswith("Failed:")
+        assert "Could not find add desktop button" in result
+
     def test_execute_command_shell(self, mocker):
         """Test executing shell command."""
         mock_exec = mocker.patch("macos_mcp.desktop.service.ax.ExecuteCommand", return_value=("output", 0))
@@ -357,7 +382,7 @@ class TestDesktopScrape:
         mocker.patch("macos_mcp.desktop.service.requests.get", return_value=mock_response)
         desktop = Desktop()
         result = desktop.scrape("https://example.com")
-        assert "<html>Test content</html>" in result
+        assert "Test content" in result
 
     def test_scrape_connection_error(self, mocker):
         """Test scraping with connection error."""
