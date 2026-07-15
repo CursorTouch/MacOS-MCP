@@ -1,6 +1,7 @@
 """Tests for profiling/desktop_state.py module."""
 
 import pytest
+from PIL import Image
 from macos_mcp.profiling.desktop_state import (
     StepStats,
     ProfileResult,
@@ -310,3 +311,59 @@ class TestCompareVision:
         assert "Delta (ms)" in table
         assert "tree.get_state" in table
         assert "get_screenshot" in table
+
+
+@pytest.mark.unit
+class TestSaveScreenshot:
+    """Tests for profile_desktop_state(save_screenshot_path=...)."""
+
+    def test_saves_last_iteration_annotated_screenshot(
+        self, mocker, mock_window, mock_tree_state, tmp_path
+    ):
+        mocker.patch(
+            "macos_mcp.profiling.desktop_state.Desktop.get_windows",
+            return_value=[mock_window],
+        )
+        mocker.patch(
+            "macos_mcp.profiling.desktop_state.Desktop.get_foreground_window",
+            return_value=mock_window,
+        )
+        mocker.patch(
+            "macos_mcp.tree.service.Tree.get_state", return_value=mock_tree_state
+        )
+        mocker.patch("macos_mcp.profiling.desktop_state.Desktop.get_screenshot")
+        fake_image = Image.new("RGB", (4, 4))
+        mocker.patch(
+            "macos_mcp.profiling.desktop_state.Desktop.get_annotated_screenshot",
+            return_value=fake_image,
+        )
+
+        out_path = tmp_path / "shot.png"
+        result = profile_desktop_state(
+            iterations=2, warmup=0, save_screenshot_path=out_path
+        )
+
+        assert out_path.exists()
+        with Image.open(out_path) as saved:
+            assert saved.size == (4, 4)
+        # save_screenshot_path implies vision even though use_vision defaulted False.
+        assert "get_annotated_screenshot" in result.steps
+
+    def test_no_file_written_when_not_requested(
+        self, mocker, mock_window, mock_tree_state, tmp_path
+    ):
+        mocker.patch(
+            "macos_mcp.profiling.desktop_state.Desktop.get_windows",
+            return_value=[mock_window],
+        )
+        mocker.patch(
+            "macos_mcp.profiling.desktop_state.Desktop.get_foreground_window",
+            return_value=mock_window,
+        )
+        mocker.patch(
+            "macos_mcp.tree.service.Tree.get_state", return_value=mock_tree_state
+        )
+
+        profile_desktop_state(iterations=1, use_vision=False, warmup=0)
+
+        assert list(tmp_path.iterdir()) == []

@@ -187,6 +187,8 @@ class Tree:
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
 
+        menubar = None
+        extras_menubar = None
         if not desktop_only:
             if menubar := app.MenuBar:
                 self.tree_traversal(
@@ -248,7 +250,14 @@ class Tree:
                         is_browser=is_browser,
                     )
             elif not all_windows:
+                # Some windowless apps (e.g. Spotlight) report their menu bar
+                # elements as top-level children too. Those were already fully
+                # traversed above, so re-scanning them here would redundantly
+                # re-walk the same (often large, mostly hidden) subtree.
+                already_scanned = [c for c in (menubar, extras_menubar) if c]
                 for child in app.GetChildren():
+                    if any(child == scanned for scanned in already_scanned):
+                        continue
                     self.tree_traversal(
                         child,
                         app_name,
@@ -424,6 +433,15 @@ class Tree:
                 continue
 
             is_visible = rect.width > 1 and rect.height > 1
+
+            if role == "AXMenu" and not is_visible:
+                # A closed submenu reports a degenerate (0-size) rect for its
+                # entire subtree — every descendant AXMenuItem/AXMenu inherits
+                # the same collapsed geometry, so none of them can ever pass
+                # the is_visible check below. Skip walking the (often large)
+                # hidden submenu instead of paying one AX round-trip per item.
+                continue
+
             has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
             has_title_ui_element = bool(early["title_ui_element"])
             is_interactive = (

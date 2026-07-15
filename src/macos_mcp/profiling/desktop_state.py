@@ -1,12 +1,16 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from statistics import mean, median, stdev
 from typing import Iterable
 from macos_mcp.desktop.service import Desktop
+from PIL import Image
 from tabulate import tabulate
 import argparse
 import threading
 import time
 import logging
+
+DEFAULT_SCREENSHOT_NAME = "annotated_screenshot.png"
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +125,7 @@ def profile_desktop_state(
     use_vision: bool = False,
     warmup: int = 1,
     per_app_breakdown: bool = False,
+    save_screenshot_path: str | Path | None = None,
 ) -> ProfileResult:
     """
     Profile the speed of capturing the desktop state (`Desktop.get_state`) by
@@ -139,10 +144,15 @@ def profile_desktop_state(
         per_app_breakdown: Whether to additionally time each app's accessibility
             tree scan individually (tree.get_state fans out one scan per running
             app), surfaced via ProfileResult.per_app / as_app_table().
+        save_screenshot_path: When set (implies use_vision), saves the last
+            iteration's annotated screenshot to this path.
 
     Returns:
         ProfileResult containing per-layer timing statistics.
     """
+    if save_screenshot_path is not None:
+        use_vision = True
+
     desktop = Desktop()
     step_names = list(BASE_STEPS)
     if use_vision:
@@ -159,9 +169,16 @@ def profile_desktop_state(
         for _ in range(warmup):
             _run_iteration(desktop, use_vision, steps=None)
 
+        last_screenshot = None
         for i in range(iterations):
-            _run_iteration(desktop, use_vision, steps=steps)
+            last_screenshot = _run_iteration(
+                desktop, use_vision, steps=steps, capture_screenshot=save_screenshot_path is not None
+            )
             logger.debug("Completed iteration %d/%d", i + 1, iterations)
+
+        if save_screenshot_path is not None and isinstance(last_screenshot, Image.Image):
+            last_screenshot.save(save_screenshot_path)
+            logger.info("Saved annotated screenshot to %s", save_screenshot_path)
     finally:
         if restore is not None:
             restore()
@@ -224,7 +241,8 @@ def _run_iteration(
     desktop: Desktop,
     use_vision: bool,
     steps: dict[str, StepStats] | None,
-) -> None:
+    capture_screenshot: bool = False,
+):
     start = time.perf_counter()
 
     t0 = time.perf_counter()
@@ -238,25 +256,26 @@ def _run_iteration(
     t3 = time.perf_counter()
 
     t4 = t5 = t3
+    annotated: Image.Image | bytes | None = None
     if use_vision:
         desktop.get_screenshot()
         t4 = time.perf_counter()
-        desktop.get_annotated_screenshot(nodes=tree_state.interactive_nodes or [])
+        annotated = desktop.get_annotated_screenshot(nodes=tree_state.interactive_nodes or [])
         t5 = time.perf_counter()
 
     end = time.perf_counter()
 
-    if steps is None:
-        return
+    if steps is not None:
+        del windows
+        steps["get_windows"].samples.append(t1 - t0)
+        steps["get_foreground_window"].samples.append(t2 - t1)
+        steps["tree.get_state"].samples.append(t3 - t2)
+        if use_vision:
+            steps["get_screenshot"].samples.append(t4 - t3)
+            steps["get_annotated_screenshot"].samples.append(t5 - t4)
+        steps["total"].samples.append(end - start)
 
-    del windows
-    steps["get_windows"].samples.append(t1 - t0)
-    steps["get_foreground_window"].samples.append(t2 - t1)
-    steps["tree.get_state"].samples.append(t3 - t2)
-    if use_vision:
-        steps["get_screenshot"].samples.append(t4 - t3)
-        steps["get_annotated_screenshot"].samples.append(t5 - t4)
-    steps["total"].samples.append(end - start)
+    return annotated if capture_screenshot else None
 
 
 def main() -> None:
@@ -282,6 +301,18 @@ def main() -> None:
         help="Additionally time each running app's accessibility tree scan.",
     )
     parser.add_argument(
+        "--save-screenshot",
+        nargs="?",
+        const=DEFAULT_SCREENSHOT_NAME,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Save the last iteration's annotated screenshot (implies --vision). "
+            f"Defaults to ./{DEFAULT_SCREENSHOT_NAME} in the current directory "
+            "if no path is given."
+        ),
+    )
+    parser.add_argument(
         "--warmup", type=int, default=1, help="Number of untimed warmup iterations."
     )
     args = parser.parse_args()
@@ -297,12 +328,15 @@ def main() -> None:
         use_vision=args.vision,
         warmup=args.warmup,
         per_app_breakdown=args.per_app,
+        save_screenshot_path=args.save_screenshot,
     )
     print(f"\nDesktop state capture profile ({result.iterations} iterations)\n")
     print(result.as_table())
     if args.per_app:
         print("\nPer-app tree scan breakdown (slowest first)\n")
         print(result.as_app_table())
+    if args.save_screenshot:
+        print(f"\nAnnotated screenshot saved to {Path(args.save_screenshot).resolve()}")
 
 
 if __name__ == "__main__":
