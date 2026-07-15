@@ -253,7 +253,6 @@ class Desktop:
 
     def get_foreground_window(self) -> Optional[Window]:
         FINDER_BUNDLE_ID = "com.apple.finder"
-        time.sleep(0.05)
         # GetFrontmostApplication is the most reliable source for the active app
         pid = None
         frontmost = ax.GetFrontmostApplication()
