@@ -26,6 +26,7 @@ from CoreFoundation import (
     CFRunLoopRemoveSource,
     CFRunLoopRunInMode,
     kCFRunLoopDefaultMode,
+    kCFRunLoopRunFinished,
 )
 from Cocoa import NSWorkspace
 
@@ -402,7 +403,17 @@ class EventObserver:
                     if now - last_refresh >= self._refresh_interval:
                         self._update_observers()
                         last_refresh = now
-                    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, False)
+                    result = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, False)
+                    if result == kCFRunLoopRunFinished:
+                        # With no sources attached to this thread's run loop
+                        # (e.g. every AXObserverCreate failed because the
+                        # process lacks Accessibility permission),
+                        # CFRunLoopRunInMode returns immediately instead of
+                        # blocking for the timeout, turning this loop into a
+                        # 100%-CPU busy spin (~1.8M iterations/s measured).
+                        # Sleep to restore the intended cadence until an
+                        # observer attaches a source.
+                        time.sleep(0.1)
         except Exception as e:
             logger.error(f"EventObserver died: {e}")
         finally:
