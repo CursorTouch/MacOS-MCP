@@ -2108,29 +2108,54 @@ def ExecuteCommand(
         Tuple of (output, return_code).
     """
     import os
+    import signal
+    import tempfile
 
     env = os.environ.copy()
+    argv = (
+        ["osascript", "-e", command]
+        if mode == "osascript"
+        else ["/bin/bash", "-c", command]
+    )
     try:
-        if mode == "osascript":
-            result = subprocess.run(
-                ["osascript", "-e", command],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
+        # stdin=DEVNULL: under the stdio transport, fd 0 is the JSON-RPC request
+        # stream. Inheriting it lets any command that reads stdin (sudo, ssh,
+        # git credential prompts, a bare `cat`) swallow the client's protocol
+        # messages, after which the server never sees the request and the client
+        # waits forever.
+        #
+        # stdout/stderr to temp files rather than pipes: a backgrounded
+        # grandchild (`cmd &`) inherits the capture fds and holds a *pipe* open
+        # after the direct child exits, so communicate() blocks for the full
+        # timeout and reports a spurious "timed out" for a command that in fact
+        # finished instantly. A regular file has no such reader/writer coupling.
+        #
+        # start_new_session=True: isolates the child in its own process group so
+        # a real timeout can reap the entire tree, not just /bin/bash.
+        with tempfile.TemporaryFile() as out_f, tempfile.TemporaryFile() as err_f:
+            proc = subprocess.Popen(
+                argv,
+                stdin=subprocess.DEVNULL,
+                stdout=out_f,
+                stderr=err_f,
                 env=env,
+                start_new_session=True,
             )
-        else:
-            result = subprocess.run(
-                ["/bin/bash", "-c", command],
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=env,
-            )
-        output = result.stdout or result.stderr or ""
-        return (output.strip(), result.returncode)
-    except subprocess.TimeoutExpired:
-        return (f"Command timed out after {timeout} seconds", -1)
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except OSError:
+                    proc.kill()
+                proc.wait()
+                return (f"Command timed out after {timeout} seconds", -1)
+            out_f.seek(0)
+            err_f.seek(0)
+            stdout = out_f.read().decode("utf-8", "replace")
+            stderr = err_f.read().decode("utf-8", "replace")
+            output = stdout or stderr or ""
+            return (output.strip(), proc.returncode)
     except Exception as e:
         return (str(e), -1)
 
