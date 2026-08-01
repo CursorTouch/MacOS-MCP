@@ -12,7 +12,7 @@ import subprocess
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import Quartz
 from Quartz import (
@@ -75,6 +75,7 @@ from ApplicationServices import (
     AXUIElementCopyElementAtPosition,
     AXUIElementCopyMultipleAttributeValues,
     AXUIElementCopyParameterizedAttributeValue,
+    AXUIElementCopyParameterizedAttributeNames,
     AXUIElementGetPid,
     AXUIElementSetMessagingTimeout,
     AXIsProcessTrusted,
@@ -296,6 +297,60 @@ def GetParameterizedAttribute(
         )
         if error == kAXErrorSuccess:
             return value
+    except Exception:
+        pass
+    return None
+
+
+def GetParameterizedAttributeNames(element: Any) -> List[str]:
+    """List the parameterized attributes an element actually advertises.
+
+    Support is wildly uneven and cannot be inferred from the role: a live
+    AXTextArea in TextEdit advertises 11 of these, a live AXWebArea in Chrome
+    advertises 44, and Chrome's omnibox AXTextField advertises 6 -- enough to
+    read text but not enough to locate it on screen. Probe with this rather
+    than assuming.
+    """
+    try:
+        error, names = AXUIElementCopyParameterizedAttributeNames(element, None)
+        if error == kAXErrorSuccess and names:
+            return list(names)
+    except Exception:
+        pass
+    return []
+
+
+def MakeCFRange(location: int, length: int) -> Any:
+    """Box a (location, length) pair as an AXValue of kAXValueCFRangeType.
+
+    Parameterized text attributes take their range argument in this form.
+    """
+    from CoreFoundation import CFRange
+
+    return AXValueCreate(AXValueType.CFRange, CFRange(int(location), int(length)))
+
+
+def ParseCFRange(value: Any) -> Optional[Tuple[int, int]]:
+    """Unbox an AXValue holding a CFRange into (location, length).
+
+    PyObjC hands back a plain 2-tuple from AXValueGetValue rather than an
+    object with .location/.length, but both shapes are handled since the
+    representation is not contractual.
+    """
+    if value is None:
+        return None
+    if isinstance(value, tuple) and len(value) == 2:
+        return (int(value[0]), int(value[1]))
+    location = getattr(value, "location", None)
+    length = getattr(value, "length", None)
+    if location is not None and length is not None:
+        return (int(location), int(length))
+    try:
+        from ApplicationServices import AXValueGetValue
+
+        success, raw = AXValueGetValue(value, AXValueType.CFRange, None)
+        if success and raw is not None:
+            return ParseCFRange(raw)
     except Exception:
         pass
     return None

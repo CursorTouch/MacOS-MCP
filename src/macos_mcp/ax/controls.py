@@ -56,10 +56,12 @@ from .core import (
     MoveTo as _MoveTo,
 )
 
+from .text import TextRange, TextRangeMixin
+
 logger = logging.getLogger(__name__)
 
 
-class Control:
+class Control(TextRangeMixin):
     """
     Base Control class wrapping a macOS AXUIElementRef.
     Equivalent to Windows UIA Control class.
