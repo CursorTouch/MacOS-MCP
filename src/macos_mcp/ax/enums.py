@@ -359,6 +359,7 @@ class Attribute:
     AttributedStringForRange = "AXAttributedStringForRange"
     RTFForRange = "AXRTFForRange"
     StyleRangeForIndex = "AXStyleRangeForIndex"
+    ReplaceRangeWithText = "AXReplaceRangeWithText"
     StringForTextMarkerRange = "AXStringForTextMarkerRange"
     AttributedStringForTextMarkerRange = "AXAttributedStringForTextMarkerRange"
     BoundsForTextMarkerRange = "AXBoundsForTextMarkerRange"
