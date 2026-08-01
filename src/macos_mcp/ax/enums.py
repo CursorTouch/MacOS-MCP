@@ -929,37 +929,49 @@ class TextAttribute:
     Keys for dictionaries describing attributed strings in the accessibility API.
     Used with parameterized attributes like AXAttributedStringForRange.
     Refer: HIServices/AXTextAttributedString.h
+
+    As with the parameterized attributes, the "Text" in Apple's constant names
+    belongs to the *name* and not to the string it expands to:
+    kAXFontTextAttribute is CFSTR("AXFont"), not "AXFontText". Verified against
+    a live AXTextArea, which returns AXFont, AXForegroundColor,
+    AXBackgroundColor, AXUnderline, AXStrikethrough, AXSuperscript, AXLink,
+    AXMisspelled, AXMarkedMisspelled and AXATextAlignmentValue -- not one of
+    them carrying the suffix.
     """
 
-    # Font attributes
-    Font = "AXFontText"
+    # Font. The value is a nested dictionary; the four keys below index into
+    # it rather than into the attribute dictionary itself.
+    Font = "AXFont"
     FontFamily = "AXFontFamily"
     FontName = "AXFontName"
     FontSize = "AXFontSize"
     VisibleName = "AXVisibleName"
 
     # Color attributes
-    ForegroundColor = "AXForegroundColorText"
-    BackgroundColor = "AXBackgroundColorText"
-    UnderlineColor = "AXUnderlineColorText"
-    StrikethroughColor = "AXStrikethroughColorText"
+    ForegroundColor = "AXForegroundColor"
+    BackgroundColor = "AXBackgroundColor"
+    UnderlineColor = "AXUnderlineColor"
+    StrikethroughColor = "AXStrikethroughColor"
 
     # Style attributes
-    Underline = "AXUnderlineText"
-    Strikethrough = "AXStrikethroughText"
-    Shadow = "AXShadowText"
-    Superscript = "AXSuperscriptText"
+    Underline = "AXUnderline"
+    Strikethrough = "AXStrikethrough"
+    Shadow = "AXShadow"
+    Superscript = "AXSuperscript"
+
+    # Paragraph attributes
+    TextAlignment = "AXATextAlignmentValue"
 
     # Content attributes
-    Attachment = "AXAttachmentText"
-    Link = "AXLinkText"
-    NaturalLanguage = "AXNaturalLanguageText"
-    ReplacementString = "AXReplacementStringText"
+    Attachment = "AXAttachment"
+    Link = "AXLink"
+    NaturalLanguage = "AXNaturalLanguage"
+    ReplacementString = "AXReplacementString"
 
-    # Spell-check attributes
-    Misspelled = "AXMisspelledText"
-    MarkedMisspelled = "AXMarkedMisspelledText"
-    Autocorrected = "AXAutocorrectedText"
+    # Spell-check attributes. No UI Automation equivalent exists for these.
+    Misspelled = "AXMisspelled"
+    MarkedMisspelled = "AXMarkedMisspelled"
+    Autocorrected = "AXAutocorrected"
 
 
 # =============================================================================
