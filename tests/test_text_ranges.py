@@ -2,7 +2,7 @@
 
 import pytest
 
-from macos_mcp.ax.core import MakeCFRange, ParseCFRange
+from macos_mcp.ax.core import MakeCFRange, ParseCFRange, Rect
 from macos_mcp.ax.enums import Attribute
 from macos_mcp.ax.text import TextRange, TextRangeMixin
 
@@ -178,3 +178,118 @@ class TestTextRangeMixin:
             type(control), "SelectionRange", property(lambda self: None)
         )
         assert control.TextAround() == ""
+
+
+@pytest.mark.unit
+class TestSplitByLine:
+    """AXBoundsForRange collapses a multi-line range into one union rect
+    spanning both lines and the full column width, so ranges are clipped to
+    each line before asking for geometry."""
+
+    LINES = [(0, 45), (45, 18)]
+
+    def test_range_within_one_line_is_untouched(self):
+        assert FakeControl()._split_by_line(4, 15, self.LINES) == [(4, 15)]
+
+    def test_range_spanning_two_lines_is_split(self):
+        assert FakeControl()._split_by_line(40, 11, self.LINES) == [(40, 5), (45, 6)]
+
+    def test_range_spanning_many_lines_yields_one_segment_each(self):
+        lines = [(0, 10), (10, 10), (20, 10), (30, 10)]
+        assert FakeControl()._split_by_line(5, 20, lines) == [(5, 5), (10, 10), (20, 5)]
+
+    def test_without_a_line_table_the_range_passes_through(self):
+        """Apps that don't expose AXRangeForLine still get one box per word."""
+        assert FakeControl()._split_by_line(40, 11, []) == [(40, 11)]
+
+    def test_range_outside_every_line_falls_back_to_itself(self):
+        assert FakeControl()._split_by_line(500, 3, self.LINES) == [(500, 3)]
+
+
+@pytest.mark.unit
+class TestShrinkToFontSize:
+    """AXBoundsForRange reports the line box, which is taller than the glyphs."""
+
+    def test_shrinks_from_the_top_anchored_to_the_baseline(self):
+        rect = Rect(left=151, top=96, right=184, bottom=109)  # 13pt line box
+        shrunk = TextRangeMixin._shrink_to_font_size(rect, 11.0)
+        assert (shrunk.top, shrunk.bottom) == (98, 109)
+        assert (shrunk.left, shrunk.right) == (151, 184)
+
+    def test_no_op_when_font_is_taller_than_the_box(self):
+        rect = Rect(left=0, top=0, right=10, bottom=10)
+        assert TextRangeMixin._shrink_to_font_size(rect, 20.0) is rect
+
+    def test_no_op_on_nonsense_font_size(self):
+        rect = Rect(left=0, top=0, right=10, bottom=10)
+        assert TextRangeMixin._shrink_to_font_size(rect, 0) is rect
+
+
+@pytest.mark.unit
+class TestWordBoundingBoxes:
+    """Tests for the whole-document word walk."""
+
+    @staticmethod
+    def _setup(mocker, text, bounds=Rect(0, 0, 10, 10), advertises=None, lines=None):
+        control = FakeControl()
+        mocker.patch(
+            "macos_mcp.ax.text.GetParameterizedAttributeNames",
+            return_value=[Attribute.BoundsForRange] if advertises is None else advertises,
+        )
+        mocker.patch.object(
+            type(control), "FullTextRange",
+            property(lambda self: TextRange(self, 0, len(text))),
+        )
+        mocker.patch.object(type(control), "_line_table", lambda self, total: lines or [])
+        mocker.patch.object(type(control), "_document_font_size", lambda self: None)
+        mocker.patch.object(
+            TextRange, "text", property(lambda self: text[self.location : self.end])
+        )
+        mocker.patch.object(TextRange, "bounds", property(lambda self: bounds))
+        return control
+
+    def test_returns_one_entry_per_whitespace_delimited_token(self, mocker):
+        control = self._setup(mocker, "The quick brown fox")
+        assert [word for word, _ in control.WordBoundingBoxes()] == [
+            "The", "quick", "brown", "fox",
+        ]
+
+    def test_punctuation_stays_attached_to_the_token(self, mocker):
+        """A clickable target, not a linguistic word: 'dog.' is one box."""
+        control = self._setup(mocker, "the lazy dog.")
+        assert [word for word, _ in control.WordBoundingBoxes()][-1] == "dog."
+
+    def test_none_when_bounds_for_range_is_not_advertised(self, mocker):
+        """Chrome's omnibox answers the call with Rect(0,900,0,900); handing
+        back a zero-area box whose centre is a real screen coordinate would
+        invite a misdirected click."""
+        control = self._setup(mocker, "hello world", advertises=[Attribute.StringForRange])
+        assert control.WordBoundingBoxes() is None
+
+    def test_degenerate_rects_are_dropped(self, mocker):
+        control = self._setup(mocker, "hello", bounds=Rect(0, 900, 0, 900))
+        assert control.WordBoundingBoxes() == []
+
+    def test_none_when_text_is_unavailable(self, mocker):
+        control = self._setup(mocker, "")
+        assert control.WordBoundingBoxes() is None
+
+    def test_wrapped_word_gets_one_box_per_line(self, mocker):
+        """A soft-wrapped token spans lines; each line needs its own rect."""
+        text = "ab " + "X" * 19  # 22 chars: a short token, then one that wraps
+        control = self._setup(mocker, text, lines=[(0, 12), (12, 10)])
+
+        words = control.WordBoundingBoxes()
+
+        assert [word for word, _ in words] == ["ab", "X" * 19]
+        assert len(words[0][1]) == 1, "the short token sits on one line"
+        assert len(words[1][1]) == 2, "the wrapped token should yield two boxes"
+
+    def test_shrink_can_be_disabled(self, mocker):
+        control = self._setup(mocker, "hi")
+        called = []
+        mocker.patch.object(
+            type(control), "_document_font_size", lambda self: called.append(1) or 11.0
+        )
+        control.WordBoundingBoxes(shrink_to_font=False)
+        assert not called, "font size must not be queried when shrinking is off"
