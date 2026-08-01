@@ -7,12 +7,12 @@
     "url": "https://github.com/Jeomon/macos-mcp",
     "source": "github"
   },
-  "version": "0.3.6",
+  "version": "0.3.12",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "macos-mcp",
-      "version": "0.3.6",
+      "version": "0.3.12",
       "transport": {
         "type": "stdio"
       },

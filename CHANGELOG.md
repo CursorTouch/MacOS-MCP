@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-08-01
+
+### Fixed
+- Packaging metadata no longer ships a stale version. `manifest.json` (0.3.8), `package.json` (0.3.5), and `server.json` (0.3.6) had drifted behind `pyproject.toml`, because the 0.3.9, 0.3.10, and 0.3.11 release commits bumped only the Python package version. The published Claude Desktop extension therefore kept advertising and installing 0.3.8 — which predates the 0.3.10 `AXIsProcessTrustedWithOptions` startup prompt — so affected users could never reach the version that requests Accessibility access, and had no update path short of installing from PyPI by hand (#32)
+
 ## [0.3.11] - 2026-07-15
 
 ### Added
