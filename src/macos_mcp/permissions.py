@@ -60,6 +60,29 @@ def check_screen_recording_permission() -> bool:
         return False
 
 
+def accessibility_guidance() -> str:
+    """Explain *which* process needs the Accessibility grant.
+
+    "Grant Accessibility permission" is not actionable on its own: the grant
+    belongs to the interpreter running this server, which the user never named
+    and cannot see. The MCP host (Claude Desktop, etc.) is a separate identity,
+    so granting the host does nothing, and nothing called "macos-mcp" ever
+    appears in the Accessibility list. Naming the binary and pointing at the
+    native consent dialog turns a dead end into a followable instruction (#32).
+    """
+    return (
+        f"The grant belongs to the process running this server -- {sys.executable} -- "
+        "not to the app that launched it, so granting the MCP host (e.g. Claude "
+        "Desktop) has no effect and no entry named 'macos-mcp' will ever appear. "
+        "On startup macOS should show a native '... would like to control this "
+        "computer' dialog; approving it registers this exact process and is the "
+        "reliable fix. Do not add the interpreter by hand in System Settings > "
+        "Privacy & Security > Accessibility -- uv-managed Python binaries are "
+        "commonly greyed out in the '+' picker, and a manual entry breaks on the "
+        "next uv update."
+    )
+
+
 def request_permissions(open_settings: bool = True) -> Tuple[bool, bool]:
     """
     Request missing permissions.
@@ -92,10 +115,14 @@ def request_permissions(open_settings: bool = True) -> Tuple[bool, bool]:
         if not screen_recording_ok:
             missing.append("Screen Recording")
 
+        # Only Accessibility has the "which process?" ambiguity worth explaining.
+        detail = f" {accessibility_guidance()}" if not accessibility_ok else ""
+
         if open_settings:
             logger.warning(
                 f"Missing permissions: {', '.join(missing)}. "
                 "Opening System Preferences. Please grant permissions and restart."
+                f"{detail}"
             )
 
             # Open System Preferences to Privacy & Security
@@ -107,7 +134,7 @@ def request_permissions(open_settings: bool = True) -> Tuple[bool, bool]:
                 timeout=5,
             )
         else:
-            logger.warning(f"Missing permissions: {', '.join(missing)}.")
+            logger.warning(f"Missing permissions: {', '.join(missing)}.{detail}")
 
     return accessibility_ok, screen_recording_ok
 
@@ -139,6 +166,8 @@ def validate_permissions() -> None:
             f"Required permissions not granted: {', '.join(missing)}. "
             "Please enable them in System Preferences > Privacy & Security and restart the MCP server."
         )
+        if not accessibility_ok:
+            msg += f" {accessibility_guidance()}"
         if skip:
             logger.warning(msg + " (continuing anyway — MACOS_MCP_SKIP_PERMISSION_CHECK=1)")
         else:

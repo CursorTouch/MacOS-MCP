@@ -245,3 +245,60 @@ class TestValidatePermissions:
 
         mock_exit.assert_not_called()
         mock_request.assert_called_once_with(open_settings=False)
+
+
+@pytest.mark.unit
+class TestAccessibilityGuidance:
+    """Tests for the Accessibility guidance text (#32).
+
+    The failure path used to say only "grant Accessibility permission" without
+    naming a target. The host app is already granted, nothing called
+    "macos-mcp" ever appears in the list, and the interpreter cannot be added
+    by hand, so the instruction was unfollowable. These tests pin the three
+    facts that make it actionable again.
+    """
+
+    def test_guidance_names_the_running_interpreter(self):
+        """The grant belongs to sys.executable, which the user cannot guess."""
+        from macos_mcp.permissions import accessibility_guidance
+
+        assert sys.executable in accessibility_guidance()
+
+    def test_guidance_points_at_the_native_dialog(self):
+        """Approving the native consent dialog is the reliable fix."""
+        from macos_mcp.permissions import accessibility_guidance
+
+        assert "control this computer" in accessibility_guidance()
+
+    def test_guidance_warns_against_manual_picker_entry(self):
+        """Adding the binary via the '+' picker is documented as not working."""
+        from macos_mcp.permissions import accessibility_guidance
+
+        guidance = accessibility_guidance()
+        assert "Do not add the interpreter by hand" in guidance
+        assert "greyed out" in guidance
+
+    def test_fatal_message_includes_guidance(self, mocker, caplog):
+        """The exit-path error names the process, not just the permission."""
+        mocker.patch("macos_mcp.permissions.request_permissions", return_value=(False, True))
+        mocker.patch("sys.exit")
+
+        from macos_mcp.permissions import validate_permissions
+
+        with caplog.at_level("ERROR"):
+            validate_permissions()
+
+        assert sys.executable in caplog.text
+
+    def test_guidance_omitted_when_only_screen_recording_missing(self, mocker, caplog):
+        """Screen Recording has no 'which process?' ambiguity, so stay quiet."""
+        mocker.patch("macos_mcp.permissions.request_permissions", return_value=(True, False))
+        mocker.patch("sys.exit")
+
+        from macos_mcp.permissions import validate_permissions
+
+        with caplog.at_level("ERROR"):
+            validate_permissions()
+
+        assert "Screen Recording" in caplog.text
+        assert "control this computer" not in caplog.text

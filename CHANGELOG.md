@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Release builds now verify that every declared version string agrees before publishing. `scripts/check_versions.py` compares `pyproject.toml`, `uv.lock`, `manifest.json`, `package.json` and `server.json` (twice) against each other and against the release tag, and `publish.yml` runs it ahead of the build so a mismatched tag fails before anything reaches PyPI — the drift that caused #32 would have been blocked at 0.3.9
+
+### Changed
+- Accessibility permission failures now name the process that needs the grant (`sys.executable`) instead of just the permission. The message also points at the native "would like to control this computer" consent dialog as the reliable fix, and warns against adding the interpreter by hand in the System Settings "+" picker, which is greyed out for uv-managed Python and breaks on the next uv update (#32)
+
 ## [0.3.12] - 2026-08-01
 
 ### Fixed
