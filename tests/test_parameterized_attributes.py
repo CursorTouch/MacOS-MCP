@@ -18,7 +18,7 @@ the corrected ones.
 
 import pytest
 
-from macos_mcp.ax.enums import Attribute
+from macos_mcp.ax.enums import Attribute, TextAttribute
 
 # Every parameterized attribute declared on Attribute. Kept as an explicit
 # list so that adding one without checking its spelling fails here.
@@ -98,4 +98,102 @@ class TestTextMarkerAttributesUnchanged:
         ],
     )
     def test_plain_marker_attributes(self, attribute, expected):
+        assert attribute == expected
+
+
+# Attributed-string keys carry the same trap as the parameterized attributes:
+# Apple's constant is kAXFontTextAttribute, but the string it expands to is
+# CFSTR("AXFont"). The "Text" belongs to the constant name, not the value.
+TEXT_ATTRIBUTES = [
+    TextAttribute.Font,
+    TextAttribute.ForegroundColor,
+    TextAttribute.BackgroundColor,
+    TextAttribute.UnderlineColor,
+    TextAttribute.StrikethroughColor,
+    TextAttribute.Underline,
+    TextAttribute.Strikethrough,
+    TextAttribute.Shadow,
+    TextAttribute.Superscript,
+    TextAttribute.TextAlignment,
+    TextAttribute.Attachment,
+    TextAttribute.Link,
+    TextAttribute.NaturalLanguage,
+    TextAttribute.ReplacementString,
+    TextAttribute.Misspelled,
+    TextAttribute.MarkedMisspelled,
+    TextAttribute.Autocorrected,
+]
+
+# Sub-keys of the nested AXFont dictionary rather than top-level attribute
+# keys. These were always correct and must not be "fixed" alongside the rest.
+FONT_SUBKEYS = [
+    TextAttribute.FontFamily,
+    TextAttribute.FontName,
+    TextAttribute.FontSize,
+    TextAttribute.VisibleName,
+]
+
+
+@pytest.mark.unit
+class TestTextAttributeSpellings:
+    """The 'Text' suffix belongs to the constant name, never to its value.
+
+    Directly observed on a live AXTextArea containing styled text: AXFont,
+    AXForegroundColor, AXBackgroundColor, AXUnderline, AXStrikethrough,
+    AXSuperscript, AXLink, AXMisspelled, AXMarkedMisspelled and
+    AXATextAlignmentValue. Not one carried the suffix.
+    """
+
+    def test_no_value_carries_the_text_suffix(self):
+        offenders = [a for a in TEXT_ATTRIBUTES if a.endswith("Text")]
+        assert offenders == [], (
+            "these keys never appear in an AXAttributedStringForRange result, "
+            f"so lookups against them always miss: {offenders}"
+        )
+
+    def test_all_values_keep_the_ax_prefix(self):
+        assert all(a.startswith("AX") for a in TEXT_ATTRIBUTES + FONT_SUBKEYS)
+
+    def test_no_duplicate_values(self):
+        everything = TEXT_ATTRIBUTES + FONT_SUBKEYS
+        assert len(set(everything)) == len(everything)
+
+    @pytest.mark.parametrize(
+        "attribute,expected",
+        [
+            # Observed directly against a live AXTextArea.
+            (TextAttribute.Font, "AXFont"),
+            (TextAttribute.ForegroundColor, "AXForegroundColor"),
+            (TextAttribute.BackgroundColor, "AXBackgroundColor"),
+            (TextAttribute.Underline, "AXUnderline"),
+            (TextAttribute.Strikethrough, "AXStrikethrough"),
+            (TextAttribute.Superscript, "AXSuperscript"),
+            (TextAttribute.Link, "AXLink"),
+            (TextAttribute.Misspelled, "AXMisspelled"),
+            (TextAttribute.MarkedMisspelled, "AXMarkedMisspelled"),
+            (TextAttribute.TextAlignment, "AXATextAlignmentValue"),
+            # Same header pattern; not exercised by the sample document.
+            (TextAttribute.UnderlineColor, "AXUnderlineColor"),
+            (TextAttribute.StrikethroughColor, "AXStrikethroughColor"),
+            (TextAttribute.Shadow, "AXShadow"),
+            (TextAttribute.Attachment, "AXAttachment"),
+            (TextAttribute.NaturalLanguage, "AXNaturalLanguage"),
+            (TextAttribute.ReplacementString, "AXReplacementString"),
+            (TextAttribute.Autocorrected, "AXAutocorrected"),
+        ],
+    )
+    def test_exact_spelling(self, attribute, expected):
+        assert attribute == expected
+
+    @pytest.mark.parametrize(
+        "attribute,expected",
+        [
+            (TextAttribute.FontFamily, "AXFontFamily"),
+            (TextAttribute.FontName, "AXFontName"),
+            (TextAttribute.FontSize, "AXFontSize"),
+            (TextAttribute.VisibleName, "AXVisibleName"),
+        ],
+    )
+    def test_font_subkeys_are_unchanged(self, attribute, expected):
+        """These index into the nested AXFont dict and were already correct."""
         assert attribute == expected
