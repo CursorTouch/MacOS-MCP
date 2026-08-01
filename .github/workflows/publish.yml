@@ -23,6 +23,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      # Fails the release if pyproject.toml, uv.lock, manifest.json,
+      # package.json and server.json don't all agree with the tag. Releases
+      # 0.3.9-0.3.11 bumped only pyproject.toml, so the published extension
+      # stayed on 0.3.8 and shipped without the Accessibility consent prompt
+      # added in 0.3.10 (#32).
+      - name: Check version consistency
+        run: python scripts/check_versions.py "${{ github.ref_name }}"
+
       - name: Build distributions
         run: uv build
 
