@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Accessibility permission failures now name the process that needs the grant (`sys.executable`) instead of just the permission. The message also points at the native "would like to control this computer" consent dialog as the reliable fix, and warns against adding the interpreter by hand in the System Settings "+" picker, which is greyed out for uv-managed Python and breaks on the next uv update (#32)
 
+### Fixed
+- Parameterized accessibility attributes now use their real names. All 13 values in `Attribute` carried a `Parameterized` suffix, which belongs to the constant name in Apple's headers (`kAXStringForRangeParameterizedAttribute`) but not to the string it expands to (`AXStringForRange`), so every parameterized call returned `kAXErrorParameterizedAttributeUnsupported` (-25213). `Control.GetTextFromMarkers` — the only caller — consequently always returned an empty string; against a live `AXWebArea` it now returns the page text instead of nothing
+
 ## [0.3.12] - 2026-08-01
 
 ### Fixed
