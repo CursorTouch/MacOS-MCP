@@ -342,24 +342,27 @@ class Attribute:
     HasPopup = "AXHasPopup"
     IsApplicationRunning = "AXIsApplicationRunning"
 
-    # Parameterized attributes (text)
-    LineForIndex = "AXLineForIndexParameterized"
-    RangeForLine = "AXRangeForLineParameterized"
-    StringForRange = "AXStringForRangeParameterized"
-    RangeForPosition = "AXRangeForPositionParameterized"
-    RangeForIndex = "AXRangeForIndexParameterized"
-    BoundsForRange = "AXBoundsForRangeParameterized"
-    AttributedStringForRange = "AXAttributedStringForRangeParameterized"
-    RTFForRange = "AXRTFForRangeParameterized"
-    StyleRangeForIndex = "AXStyleRangeForIndexParameterized"
-    StringForTextMarkerRange = "AXStringForTextMarkerRangeParameterized"
-    AttributedStringForTextMarkerRange = (
-        "AXAttributedStringForTextMarkerRangeParameterized"
-    )
-    BoundsForTextMarkerRange = "AXBoundsForTextMarkerRangeParameterized"
-    TextMarkerRangeForUnorderedTextMarkers = (
-        "AXTextMarkerRangeForUnorderedTextMarkersParameterized"
-    )
+    # Parameterized attributes (text).
+    #
+    # These carry the "Parameterized" suffix in the *constant* name in Apple's
+    # headers (kAXStringForRangeParameterizedAttribute) but NOT in the string
+    # value it expands to (CFSTR("AXStringForRange")). Verified against a live
+    # AXTextArea and a live AXWebArea: neither advertises a single attribute
+    # ending in "Parameterized", and calling with the suffixed spelling returns
+    # kAXErrorParameterizedAttributeUnsupported (-25213) every time.
+    LineForIndex = "AXLineForIndex"
+    RangeForLine = "AXRangeForLine"
+    StringForRange = "AXStringForRange"
+    RangeForPosition = "AXRangeForPosition"
+    RangeForIndex = "AXRangeForIndex"
+    BoundsForRange = "AXBoundsForRange"
+    AttributedStringForRange = "AXAttributedStringForRange"
+    RTFForRange = "AXRTFForRange"
+    StyleRangeForIndex = "AXStyleRangeForIndex"
+    StringForTextMarkerRange = "AXStringForTextMarkerRange"
+    AttributedStringForTextMarkerRange = "AXAttributedStringForTextMarkerRange"
+    BoundsForTextMarkerRange = "AXBoundsForTextMarkerRange"
+    TextMarkerRangeForUnorderedTextMarkers = "AXTextMarkerRangeForUnorderedTextMarkers"
 
     # Date/Time field attributes
     AMPMField = "AXAMPMField"
