@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-08-03
+
+### Added
+- Text-entry elements now report their selection state. `AXTextField`, `AXTextArea`, `AXComboBox` and the `AXSearchField` subrole carry `selected_text` in metadata, plus `all_selected` when the selection covers the whole value — so a caller can tell whether typing will replace existing content or insert at a caret. Clicking a browser address bar selects its full value, and that is now visible in a snapshot. `AXSelectedText` and `AXSelectedTextRange` ride along in the existing phase-2 batch rather than adding a round-trip, and only real selections are reported since a zero-length caret is the resting state of every focused field
+
+### Changed
+- `AXPlaceholderValue` now participates in an element's label, after `value` and ahead of `identifier`. Search fields and unlabelled inputs frequently expose nothing else — YouTube's search box is an `AXComboBox` whose only descriptive attribute is a placeholder of "Search" — and without this they were nameless, which also made them invisible to name-based filtering
+
+### Fixed
+- Window control buttons no longer disappear from browser windows. Close, minimise, zoom and full-screen buttons expose no title, description, value or identifier, and were named only by `_desktop_correction`, which runs for native windows; browsers take the `_dom_correction` path instead and so lost their window controls entirely once name-based filtering was introduced. They are now named from `WINDOW_CONTROL_SUBROLES` during traversal, before the browser/native split, so both paths keep them
+- Elements inside a zero-area container are no longer pruned. Clipping an element's box against the window could produce a `0x0` result for a collapsed wrapper, and the traversal then skipped that element *and its whole subtree* — Instagram positions a floating button inside a zero-height wrapper at the page bottom, so the button vanished despite having a valid rect well inside the window. A degenerate box now suppresses only the element itself, and traversal descends into its children, matching how a `None` rect was already handled. Note this costs noticeably more on DOM-heavy pages, where collapsed wrappers are common: a Chrome window measured roughly 320ms before and 600ms after, for 10 additional nodes; native applications are essentially unaffected
 ## [0.3.13] - 2026-08-03
 
 ### Added
