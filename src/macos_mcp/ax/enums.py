@@ -123,7 +123,8 @@ class Role:
     Splitter = "AXSplitter"
     StaticText = "AXStaticText"
     SystemWide = "AXSystemWide"
-    Tab = "AXTab"
+    # No "AXTab" role exists. An individual tab is an AXRadioButton carrying
+    # the AXTabButton subrole -- match one with Subrole.TabButton.
     TabGroup = "AXTabGroup"
     Table = "AXTable"
     TextArea = "AXTextArea"
