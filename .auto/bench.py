@@ -99,6 +99,11 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--write-reference", action="store_true")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--vision",
+        action="store_true",
+        help="benchmark the screenshot + annotation path instead of the tree walk",
+    )
     args = parser.parse_args()
 
     if args.write_reference or args.check:
@@ -126,6 +131,30 @@ def main() -> int:
                 print("  ...")
             return 1
         print(f"capture unchanged: {len(current)} entries match reference")
+        return 0
+
+    if args.vision:
+        # Screenshot + annotation, driven with a fixed node list so the
+        # measurement isolates the vision path and does not re-time the tree
+        # walk (already covered by the default mode).
+        from macos_mcp.desktop.service import Desktop
+
+        desktop = Desktop()
+        _elapsed, interactive, _scroll = capture()
+        _require_sane(interactive)
+
+        timings = []
+        image = None
+        for _ in range(args.runs):
+            started = time.perf_counter()
+            image = desktop.get_annotated_screenshot(nodes=interactive)
+            timings.append((time.perf_counter() - started) * 1000)
+        if image is None:
+            sys.exit("annotated screenshot returned None -- Screen Recording permission?")
+        print(f"METRIC ms={statistics.median(timings):.1f}")
+        print(f"METRIC min_ms={min(timings):.1f}")
+        print(f"METRIC width={image.size[0]}")
+        print(f"METRIC height={image.size[1]}")
         return 0
 
     # Timing mode.
