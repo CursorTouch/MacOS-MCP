@@ -17,7 +17,7 @@ Median of 5 full captures. Prints `METRIC ms=<median>`, plus `min_ms` and
 
 ## Metric
 
-`ms` — **lower is better**. Baseline was 695.7 ms; currently **103.6 ms**.
+`ms` — **lower is better**. Baseline was 695.7 ms; currently **~68 ms** (−90%).
 
 Timing noise is roughly ±14% run to run, so a change under ~5% is inside the
 noise. Re-run before believing anything small, and prefer changes with a
@@ -119,30 +119,32 @@ that is very likely the next win.
 
 Ordered by expected value.
 
-1. **Parallelise the walk within one app.** The biggest remaining lever. The
-   traversal is a serial stack walk and each element costs a blocking ~339 us
-   round-trip; Chrome alone accounts for most of the 738 elements. Work is
-   already threaded *per bundle*, but not *within* a bundle. Needs care: AX
-   calls from multiple threads, and node ordering would change (the gate
-   compares sorted sets, so it would **not** catch an ordering change — check
-   that separately if output order matters to consumers).
-2. **Traverse fewer elements.** 738 elements yield 137 nodes. Measure how many
-   are pruned after being fetched, and whether a cheaper predicate could skip
-   them before the batch call.
-3. **Trim the phase-1 attribute list.** Nine attributes are fetched for every
-   element. Fewer attributes may mean a cheaper round-trip — measure whether
-   cost scales with attribute count before assuming it does. Removing one that
-   is genuinely used changes behaviour, and the gate will catch it.
-4. **Cache the bundle → running-application lookup**, and reuse the `Tree` /
-   thread pool across captures rather than constructing per call.
-5. **Skip menu-bar traversal for system-UI bundles** that contribute nothing,
+1. **Cache the bundle → running-application lookup**, and reuse the `Tree` /
+   thread pool across captures rather than constructing per call. Small —
+   5 lookups per capture — but free.
+2. **Skip menu-bar traversal for system-UI bundles** that contribute nothing,
    if the gate confirms no node loss.
-6. **Avoid the double fetch in `GetTraversalBatch`** (early + late again) used
+3. **Avoid the double fetch in `GetTraversalBatch`** (early + late again) used
    by correction helpers — only 16 calls, so small, but free.
-7. **Revisit the zero-area descend added in 17f46ca.** It walks subtrees under
-   collapsed wrappers, which is expensive on DOM-heavy pages. A narrower rule
-   (descend only when the *parent* box is non-degenerate) might recover time
-   without losing the nodes it was added to rescue — the gate will verify.
+4. **Reduce the 409 elements walked further.** They yield 137 nodes. 30% are
+   already filtered as invisible *after* being fetched; a predicate that could
+   skip them *before* the round-trip would be the remaining structural win, but
+   role and geometry both come from that same batch, so it is not obvious one
+   exists.
+
+### Measured and rejected — do not redo without new information
+
+- **Splitting phase 1 into two tiers** (cheap discriminators, then interactivity
+  attributes only for survivors). Round-trip cost does scale with attribute
+  count — 1 attr 30.7 us, 9 attrs 98.0 us — but the ~30 us base dominates, and
+  only 30% of elements would skip the second tier. Estimated 54 ms against
+  40 ms today. Rejected on arithmetic, before writing code.
+- **Prefetching phase-1 batches on a worker pool** (experiment #7). Made it
+  *slower*: 67.7 ms to 80.5 and 83.0 ms across two runs. A single application's
+  accessibility server appears to serialise requests, so overlapping buys
+  nothing, while submitting futures for children that are later pruned costs
+  real work. Reverted in 36f5f0b. Note the work is already threaded *per
+  bundle*, which is where the parallelism actually pays.
 
 ## Log
 
@@ -153,6 +155,9 @@ Ordered by expected value.
 | 3 | `AXValueGetValue` before `getattr` in `ParseCFRange` — same trap | 178.2 | keep (−74.4%) |
 | 4 | memoise the `isinstance` classification by concrete type in `GetMultipleAttributeValues` | 103.9 | keep (−85.1%) |
 | 5 | materialise the children `NSArray` into a list once | 103.6 | keep — inside noise, retained for fewer bridge calls |
+| 6 | descend past a degenerate box only when the parent had a usable one | **67.7** | keep (−90.3%) — elements walked 738 → 409 |
+| 7 | prefetch phase-1 batches on a 4-worker pool | 83.0 | **discard** — slower, reverted |
+| 8 | revert of #7, confirming the plateau | 70.3 | keep |
 
 All experiments passed the correctness gate: 137 interactive nodes, fingerprint
 identical to the reference including bounding boxes.
