@@ -207,6 +207,14 @@ class Subrole:
     Switch = "AXSwitch"
     DescriptionList = "AXDescriptionList"
 
+    # Documented in ApplicationServices
+    ApplicationGroup = "AXApplicationGroup"
+
+    # Observed on live elements, absent from any public header
+    MenuExtra = "AXMenuExtra"
+    Segment = "AXSegment"
+    ToggleButton = "AXToggleButton"
+
 
 SubroleNames = {
     v: k
@@ -381,6 +389,79 @@ class Attribute:
     ValueIncrement = "AXValueIncrement"
     ColumnTitle = "AXColumnTitle"
 
+    # ---- Documented in ApplicationServices (kAX*Attribute) -----------------
+    # Found by walking live applications: real attributes that were simply
+    # never declared here.
+
+    # Outline / disclosure. DisclosedRows, DisclosedByRow and DisclosureLevel
+    # were already present; Disclosing is the one that says whether a row is
+    # currently expanded, so without it the other three cannot be interpreted.
+    Disclosing = "AXDisclosing"
+
+    # State
+    Edited = "AXEdited"
+    Frontmost = "AXFrontmost"
+    Invalid = "AXInvalid"
+    ElementBusy = "AXElementBusy"
+    Loaded = "AXLoaded"
+    LoadingProgress = "AXLoadingProgress"
+    AlternateUIVisible = "AXAlternateUIVisible"
+
+    # Relationships
+    Owns = "AXOwns"
+    FocusableAncestor = "AXFocusableAncestor"
+    HighestEditableAncestor = "AXHighestEditableAncestor"
+    NextContents = "AXNextContents"
+    PreviousContents = "AXPreviousContents"
+
+    # Table / grid geometry
+    SelectedCells = "AXSelectedCells"
+    RowIndexRange = "AXRowIndexRange"
+    ColumnIndexRange = "AXColumnIndexRange"
+    Splitters = "AXSplitters"
+
+    # Sub-elements of composite controls
+    ClearButton = "AXClearButton"
+    SearchButton = "AXSearchButton"
+    OverflowButton = "AXOverflowButton"
+
+    # Web / ARIA
+    AccessKey = "AXAccessKey"
+    ARIAPosInSet = "AXARIAPosInSet"
+    DOMClassList = "AXDOMClassList"
+    DOMIdentifier = "AXDOMIdentifier"
+    PopupValue = "AXPopupValue"
+    KeyShortcutsValue = "AXKeyShortcutsValue"
+
+    # ---- Documented via NSAccessibility constants --------------------------
+    ActivationPoint = "AXActivationPoint"
+    BlockQuoteLevel = "AXBlockQuoteLevel"
+    ChildrenInNavigationOrder = "AXChildrenInNavigationOrder"
+    EmbeddedImageDescription = "AXEmbeddedImageDescription"
+    Required = "AXRequired"
+    Visited = "AXVisited"
+
+    # ---- Observed on live elements, absent from any public header ----------
+    # Real and answered by applications, but undocumented: treat as
+    # best-effort and expect them to be missing more often than the above.
+    AutocompleteValue = "AXAutocompleteValue"
+    ContentSize = "AXContentSize"
+    CustomActions = "AXCustomActions"
+    CustomContent = "AXCustomContent"
+    FunctionRowTopLevelElements = "AXFunctionRowTopLevelElements"
+    MakeScreenRectVisible = "AXMakeScreenRectVisible"
+    ManualAccessibility = "AXManualAccessibility"
+    PreferredLanguage = "AXPreferredLanguage"
+    RectInParentSpace = "AXRectInParentSpace"
+    Sections = "AXSections"
+    UserInputLabels = "AXUserInputLabels"
+    FirstContentSibling = "AXFirstContentSibling"
+    LastContentSibling = "AXLastContentSibling"
+    NextContentSibling = "AXNextContentSibling"
+    PreviousContentSibling = "AXPreviousContentSibling"
+    ContentSiblingAbove = "AXContentSiblingAbove"
+    ContentSiblingBelow = "AXContentSiblingBelow"
+
 
 # =============================================================================
 # Actions
@@ -408,6 +489,13 @@ class Action:
     ScrollRightByPage = "AXScrollRightByPage"
     ScrollUpByPage = "AXScrollUpByPage"
     ScrollDownByPage = "AXScrollDownByPage"
+
+    # Documented via NSAccessibilityScrollToVisibleAction
+    ScrollToVisible = "AXScrollToVisible"
+
+    # Observed on live elements, absent from any public header
+    Open = "AXOpen"
+    ZoomWindow = "AXZoomWindow"
 
 
 ActionNames = {
