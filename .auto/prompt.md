@@ -154,6 +154,52 @@ Ordered by expected value.
   Reference regenerated at that point; tree-walk numbers #1-#9 were taken
   against the previous one. Node *count* was unaffected (137).
 
+## Second segment: the vision path (`use_vision=True`)
+
+Benchmark: `bash .auto/measure_vision.sh` — screenshot + annotation, driven
+with a fixed node list so it isolates the vision cost. Baseline **258.2 ms**.
+
+Cost breakdown of that 258 ms:
+
+| step | ms |
+|---|---|
+| `get_screenshot()` via `ImageGrab` | ~242 |
+| annotation drawing (137 boxes) | ~16 |
+
+So the vision path is essentially one call. Pillow's `ImageGrab` on macOS
+shells out to the `screencapture` binary and round-trips a temporary PNG.
+
+### The CoreGraphics option — decided against, pending a call
+
+`CGWindowListCreateImage` in process is dramatically faster:
+
+| | ms |
+|---|---|
+| `ImageGrab.grab(all_screens=True)` | 245 |
+| `CGWindowListCreateImage` alone | 21 |
+| ... plus BGRA→PIL conversion | 49 |
+| **full benchmark** | **258 → 60 (4.3x)** |
+
+Output is faithful: same 2880x1800, same RGBA mode, and the cross-method
+pixel difference (0.01–0.04%) is the same order as two consecutive
+`ImageGrab` captures of a live screen (0.0078%) — it is the cursor and clock
+moving. Two consecutive CoreGraphics captures differ by 0.0000%.
+
+**But it lights the macOS screen-recording indicator.** The Control Centre
+menu bar item renames itself to "Control Centre, Screen Recording is in use"
+for about ten seconds after each capture, which the gate correctly flagged as
+a changed capture. Verified this is inherent to in-process capture rather than
+to a particular API: `CGDisplayCreateImage` triggers it too, while the
+`screencapture` binary does not.
+
+Reverted in a2e6a55 and logged as `checks_failed`, because the session's
+constraint is that capture quality must not change and this does change it —
+and because a background automation tool lighting the recording indicator on
+every snapshot is a user-visible decision, not a purely technical one.
+
+**If that trade is acceptable, reinstate d8ef6a0 — it is a 4.3x win and
+nothing else in the vision path comes close.**
+
 ## Log
 
 | # | change | ms | status |
