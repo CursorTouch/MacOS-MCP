@@ -146,6 +146,14 @@ Ordered by expected value.
   real work. Reverted in 36f5f0b. Note the work is already threaded *per
   bundle*, which is where the parallelism actually pays.
 
+## Reference regenerations
+
+- **Before the vision baseline.** The Dock gained items mid-session, shifting
+  every `AXDockItem` box by ~46 px and adding several entries. The gate
+  correctly flagged it as a changed capture even though no code had changed.
+  Reference regenerated at that point; tree-walk numbers #1-#9 were taken
+  against the previous one. Node *count* was unaffected (137).
+
 ## Log
 
 | # | change | ms | status |
