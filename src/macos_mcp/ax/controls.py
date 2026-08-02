@@ -1114,9 +1114,14 @@ class Control(TextRangeMixin):
     def TabControl(
         self, title=None, identifier=None, predicate=None, max_depth=25
     ) -> "TabControl":
-        """Find the first AXTab child control (use AXTabGroup for tab groups)."""
+        """Find the first tab control (use AXTabGroup for the group itself).
+
+        Tabs are matched on subrole, not role: macOS reports an individual tab
+        as role AXRadioButton with subrole AXTabButton. There is no "AXTab"
+        role, which is what this searched for previously, so it never matched.
+        """
         return self.FindFirst(
-            role=Role.Tab,
+            subrole=Subrole.TabButton,
             title=title,
             identifier=identifier,
             predicate=predicate,
@@ -2174,7 +2179,6 @@ _ROLE_TO_CONTROL_CLASS = {
     Role.Slider: SliderControl,
     Role.MenuItem: MenuItemControl,
     Role.MenuBarItem: MenuBarItemControl,
-    Role.Tab: TabControl,
     Role.List: ListControl,
     Role.Table: TableControl,
     Role.Outline: OutlineControl,
@@ -2206,6 +2210,13 @@ def CreateControl(element) -> Control:
     """
     role = GetAttribute(element, Attribute.Role)
     control_class = _ROLE_TO_CONTROL_CLASS.get(role, Control)
+    # Tabs are the one control identified by subrole rather than role: macOS
+    # reports them as AXRadioButton/AXTabButton. The subrole is only fetched
+    # for radio buttons, so this costs nothing on the rest of the tree -- _wrap
+    # runs for every element and an unconditional extra round-trip would show.
+    if role == Role.RadioButton:
+        if GetAttribute(element, Attribute.Subrole) == Subrole.TabButton:
+            control_class = TabControl
     return control_class(element=element)
 
 
