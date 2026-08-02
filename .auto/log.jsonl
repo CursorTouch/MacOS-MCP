@@ -1,0 +1,2 @@
+{"type": "config", "name": "Cut macOS desktop-state capture time", "metric_name": "ms", "metric_unit": "ms", "direction": "lower", "timestamp": 1785700580.745753}
+{"type": "result", "commit": "25c28c1", "metric": 695.7, "metrics": {"min_ms": 670.9, "nodes": 137.0}, "status": "keep", "description": "baseline \u2014 median of 5 captures, Chrome + system UI, 137 nodes", "timestamp": 1785700604.153036, "segment": 0, "confidence": null}
