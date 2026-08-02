@@ -733,6 +733,10 @@ def GetElementPid(element: Any) -> Optional[int]:
     return None
 
 
+# Concrete type -> (is_int, is_plain), memoised for GetMultipleAttributeValues.
+# Bounded in practice: PyObjC returns only a handful of distinct types here.
+_VALUE_TYPE_CACHE: dict[type, Tuple[bool, bool]] = {}
+
 def GetMultipleAttributeValues(
     element: Any,
     attributes: Sequence[str],
@@ -764,10 +768,25 @@ def GetMultipleAttributeValues(
                 # ints or AXValue objects of type kAXValueAXErrorType (5).
                 if val is None:
                     continue
-                if isinstance(val, int) and val < 0:
+                # isinstance against a bridge type costs ~3.6us here and this
+                # loop runs ~8k times per capture, but the answer depends only
+                # on the concrete type -- and PyObjC returns a handful of them
+                # (AXValueRef, bool, pyobjc_unicode, __NSArrayM). Decide once
+                # per type, then it is a dict lookup.
+                value_type = type(val)
+                classified = _VALUE_TYPE_CACHE.get(value_type)
+                if classified is None:
+                    classified = (
+                        isinstance(val, int),
+                        isinstance(val, (str, bool, int, float, list, dict)),
+                    )
+                    _VALUE_TYPE_CACHE[value_type] = classified
+                is_int, is_plain = classified
+
+                if is_int and val < 0:
                     continue
                 # Detect AXValue error objects (kAXValueAXErrorType = 5)
-                if not isinstance(val, (str, bool, int, float, list, dict)):
+                if not is_plain:
                     try:
                         if AXValueGetType(val) == AXValueType.AXError:
                             continue
