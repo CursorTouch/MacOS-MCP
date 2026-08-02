@@ -290,50 +290,79 @@ class Tree:
     def _dom_correction(
         self,
         attrs: dict,
-        interactive_nodes: list[TreeElementNode],
+        node: TreeElementNode,
         window_name: str,
         main_window_bounding_box: BoundingBox | None = None,
-    ):
-        if attrs["role"] == "AXLink":
-            children = attrs.get("children", [])
-            if children:
-                first_child_element = children[0]
-                # Single batch call: check role and get display attrs in one IPC round-trip.
-                child_attrs = ax.GetTraversalBatch(first_child_element)
-                if child_attrs["role"] == "AXHeading":
-                    interactive_nodes.pop()
-                    if child_attrs["rect"]:
-                        bounding_box = BoundingBox.from_bounding_rectangle(
-                            child_attrs["rect"]
-                        )
-                        if main_window_bounding_box:
-                            bounding_box = self.iou_bounding_box(
-                                main_window_bounding_box, bounding_box
-                            )
-                        center = bounding_box.get_center()
-                        metadata = {}
-                        if child_attrs["identifier"]:
-                            metadata["axidentifier"] = child_attrs["identifier"]
-                        interactive_nodes.append(
-                            TreeElementNode(
-                                bounding_box=bounding_box,
-                                center=center,
-                                name=child_attrs["label"] or "",
-                                control_type=child_attrs["role"] or "",
-                                window_name=window_name,
-                                metadata=metadata,
-                            )
-                        )
+    ) -> TreeElementNode | None:
+        """Refine a node for browser content, or drop it.
+
+        Returns the node unchanged when nothing applies, a replacement when
+        it does, or None when the node should not be emitted at all.
+        """
+        if attrs["role"] != "AXLink":
+            return node
+
+        children = attrs.get("children", [])
+        if not children:
+            return node
+
+        # Single batch call: check role and get display attrs in one IPC round-trip.
+        child_attrs = ax.GetTraversalBatch(children[0])
+        if child_attrs["role"] != "AXHeading":
+            return node
+
+        # A link wrapping a heading is represented by the heading itself. If
+        # the heading has no rect there is nothing to point at, so the node is
+        # dropped rather than emitted with the link's own geometry.
+        if not child_attrs["rect"]:
+            return None
+
+        bounding_box = BoundingBox.from_bounding_rectangle(child_attrs["rect"])
+        if main_window_bounding_box:
+            bounding_box = self.iou_bounding_box(main_window_bounding_box, bounding_box)
+        metadata = {}
+        if child_attrs["identifier"]:
+            metadata["axidentifier"] = child_attrs["identifier"]
+        return TreeElementNode(
+            bounding_box=bounding_box,
+            center=bounding_box.get_center(),
+            name=child_attrs["label"] or "",
+            control_type=child_attrs["role"] or "",
+            window_name=window_name,
+            metadata=metadata,
+        )
 
     def _desktop_correction(
         self,
         attrs: dict,
-        interactive_nodes: list[TreeElementNode],
+        node: TreeElementNode,
         window_name: str,
         main_window_bounding_box: BoundingBox | None = None,
-    ):
+    ) -> TreeElementNode | None:
+        """Refine a node for native content, or drop it.
+
+        Returns the node unchanged when nothing applies. Kept symmetrical with
+        _dom_correction -- it has no drop case today, but the caller treats
+        both the same way.
+        """
         role = attrs["role"]
         rect = attrs["rect"]
+
+        def relabelled(name: str) -> TreeElementNode:
+            bounding_box = BoundingBox.from_bounding_rectangle(rect)
+            if main_window_bounding_box:
+                bounding_box = self.iou_bounding_box(
+                    main_window_bounding_box, bounding_box
+                )
+            return TreeElementNode(
+                bounding_box=bounding_box,
+                center=bounding_box.get_center(),
+                name=name,
+                control_type=role,
+                window_name=window_name,
+                metadata=node.metadata,
+            )
+
         if role in ["AXCell", "AXGroup"]:
             children = attrs.get("children", [])
             current_element = children[0] if children else None
@@ -353,46 +382,16 @@ class Tree:
                 next_children = batch.get(ax.Attribute.Children)
                 current_element = next_children[0] if next_children else None
 
+            # `is not None` on purpose: an empty label still replaces the node.
             if found_static_text_value is not None:
-                node = interactive_nodes.pop()
-                metadata = node.metadata
-                bounding_box = BoundingBox.from_bounding_rectangle(rect)
-                if main_window_bounding_box:
-                    bounding_box = self.iou_bounding_box(
-                        main_window_bounding_box, bounding_box
-                    )
-                center = bounding_box.get_center()
-                interactive_nodes.append(
-                    TreeElementNode(
-                        bounding_box=bounding_box,
-                        center=center,
-                        name=found_static_text_value,
-                        control_type=role,
-                        window_name=window_name,
-                        metadata=metadata,
-                    )
-                )
+                return relabelled(found_static_text_value)
+
         elif role == "AXButton":
             subrole = attrs["subrole"]
             if subrole in WINDOW_CONTROL_SUBROLES:
-                node = interactive_nodes.pop()
-                metadata = node.metadata
-                element_bounding_box = BoundingBox.from_bounding_rectangle(rect)
-                if main_window_bounding_box:
-                    element_bounding_box = self.iou_bounding_box(
-                        main_window_bounding_box, element_bounding_box
-                    )
-                center = element_bounding_box.get_center()
-                interactive_nodes.append(
-                    TreeElementNode(
-                        bounding_box=element_bounding_box,
-                        center=center,
-                        name=WINDOW_CONTROL_SUBROLES[subrole] or "",
-                        control_type=role,
-                        window_name=window_name,
-                        metadata=metadata,
-                    )
-                )
+                return relabelled(WINDOW_CONTROL_SUBROLES[subrole] or "")
+
+        return node
 
     def tree_traversal(
         self,
@@ -533,26 +532,23 @@ class Tree:
                 if late.get("identifier"):
                     metadata["axidentifier"] = late["identifier"]
 
-                interactive_nodes.append(
-                    TreeElementNode(
-                        bounding_box=bounding_box,
-                        center=center,
-                        name=label,
-                        control_type=role,
-                        window_name=window_name,
-                        metadata=metadata,
-                    )
+                node = TreeElementNode(
+                    bounding_box=bounding_box,
+                    center=center,
+                    name=label,
+                    control_type=role,
+                    window_name=window_name,
+                    metadata=metadata,
                 )
 
-                if current_is_browser:
-                    self._dom_correction(
-                        attrs, interactive_nodes, window_name, main_window_bounding_box
-                    )
-                else:
-                    self._desktop_correction(
-                        attrs, interactive_nodes, window_name, main_window_bounding_box
-                    )
-                
+                correct = (
+                    self._dom_correction
+                    if current_is_browser
+                    else self._desktop_correction
+                )
+                node = correct(attrs, node, window_name, main_window_bounding_box)
+                if node is not None:
+                    interactive_nodes.append(node)
 
             if role in SCROLLABLE_ROLES and is_visible:
                 first_child = children[0] if children else None

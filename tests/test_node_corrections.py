@@ -35,6 +35,20 @@ def batch(role, label="", identifier="", rect=Rect(left=1, top=2, right=11, bott
     return {"role": role, "label": label, "identifier": identifier, "rect": rect}
 
 
+def apply(correction, attrs, nodes, window_name="Win", window_box=None):
+    """Run a correction over the tail of `nodes`, mirroring how the traversal
+    now uses it: transform the node, then append only if it survives.
+
+    Only the call shape changed in the refactor; every assertion below is
+    unchanged from when these functions mutated the list directly.
+    """
+    node = nodes.pop()
+    result = correction(attrs, node, window_name, window_box)
+    if result is not None:
+        nodes.append(result)
+    return nodes
+
+
 @pytest.fixture
 def tree():
     return Tree()
@@ -52,7 +66,7 @@ class TestDomCorrection:
         )
         nodes = [make_node()]
 
-        tree._dom_correction({"role": "AXLink", "children": ["<child>"]}, nodes, "Win")
+        apply(tree._dom_correction, {"role": "AXLink", "children": ["<child>"]}, nodes)
 
         assert len(nodes) == 1
         assert nodes[0].control_type == "AXHeading"
@@ -68,7 +82,7 @@ class TestDomCorrection:
         )
         nodes = [make_node()]
 
-        tree._dom_correction({"role": "AXLink", "children": ["<child>"]}, nodes, "Win")
+        apply(tree._dom_correction, {"role": "AXLink", "children": ["<child>"]}, nodes)
 
         assert nodes == [], "a rect-less heading currently removes the node"
 
@@ -80,7 +94,7 @@ class TestDomCorrection:
         original = make_node()
         nodes = [original]
 
-        tree._dom_correction({"role": "AXLink", "children": ["<child>"]}, nodes, "Win")
+        apply(tree._dom_correction, {"role": "AXLink", "children": ["<child>"]}, nodes)
 
         assert nodes == [original]
 
@@ -88,7 +102,7 @@ class TestDomCorrection:
         original = make_node()
         nodes = [original]
 
-        tree._dom_correction({"role": "AXLink", "children": []}, nodes, "Win")
+        apply(tree._dom_correction, {"role": "AXLink", "children": []}, nodes)
 
         assert nodes == [original]
 
@@ -96,7 +110,7 @@ class TestDomCorrection:
         original = make_node(control_type="AXButton")
         nodes = [original]
 
-        tree._dom_correction({"role": "AXButton", "children": ["<child>"]}, nodes, "Win")
+        apply(tree._dom_correction, {"role": "AXButton", "children": ["<child>"]}, nodes)
 
         assert nodes == [original]
 
@@ -108,8 +122,7 @@ class TestDomCorrection:
         window = BoundingBox(left=0, top=0, right=100, bottom=100, width=100, height=100)
         nodes = [make_node()]
 
-        tree._dom_correction(
-            {"role": "AXLink", "children": ["<child>"]}, nodes, "Win", window
+        apply(tree._dom_correction, {"role": "AXLink", "children": ["<child>"]}, nodes, "Win", window
         )
 
         assert nodes[0].bounding_box.right <= 100
@@ -141,9 +154,7 @@ class TestDesktopCorrection:
         self._static_text(mocker, "Downloads")
         nodes = [make_node(control_type=role, metadata={"axidentifier": "keep"})]
 
-        tree._desktop_correction(
-            {"role": role, "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes, "Win"
-        )
+        apply(tree._desktop_correction, {"role": role, "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes)
 
         assert len(nodes) == 1
         assert nodes[0].name == "Downloads"
@@ -154,9 +165,7 @@ class TestDesktopCorrection:
         self._static_text(mocker, "Deep", depth=3)
         nodes = [make_node(control_type="AXCell")]
 
-        tree._desktop_correction(
-            {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes, "Win"
-        )
+        apply(tree._desktop_correction, {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes)
 
         assert nodes[0].name == "Deep"
 
@@ -170,9 +179,7 @@ class TestDesktopCorrection:
         original = make_node(control_type="AXCell")
         nodes = [original]
 
-        tree._desktop_correction(
-            {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes, "Win"
-        )
+        apply(tree._desktop_correction, {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes)
 
         assert nodes == [original]
 
@@ -180,9 +187,7 @@ class TestDesktopCorrection:
         original = make_node(control_type="AXCell")
         nodes = [original]
 
-        tree._desktop_correction(
-            {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": []}, nodes, "Win"
-        )
+        apply(tree._desktop_correction, {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": []}, nodes)
 
         assert nodes == [original]
 
@@ -191,9 +196,7 @@ class TestDesktopCorrection:
         self._static_text(mocker, "")
         nodes = [make_node(control_type="AXCell", name="before")]
 
-        tree._desktop_correction(
-            {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes, "Win"
-        )
+        apply(tree._desktop_correction, {"role": "AXCell", "rect": Rect(0, 0, 10, 10), "children": ["<c>"]}, nodes)
 
         assert nodes[0].name == ""
 
@@ -209,9 +212,7 @@ class TestDesktopCorrection:
     def test_window_control_buttons_get_readable_names(self, tree, subrole, expected):
         nodes = [make_node(control_type="AXButton", metadata={"axidentifier": "keep"})]
 
-        tree._desktop_correction(
-            {"role": "AXButton", "subrole": subrole, "rect": Rect(0, 0, 10, 10)}, nodes, "Win"
-        )
+        apply(tree._desktop_correction, {"role": "AXButton", "subrole": subrole, "rect": Rect(0, 0, 10, 10)}, nodes)
 
         assert len(nodes) == 1
         assert nodes[0].name == expected
@@ -222,11 +223,7 @@ class TestDesktopCorrection:
         original = make_node(control_type="AXButton")
         nodes = [original]
 
-        tree._desktop_correction(
-            {"role": "AXButton", "subrole": "AXSomethingElse", "rect": Rect(0, 0, 10, 10)},
-            nodes,
-            "Win",
-        )
+        apply(tree._desktop_correction, {"role": "AXButton", "subrole": "AXSomethingElse", "rect": Rect(0, 0, 10, 10)}, nodes)
 
         assert nodes == [original]
 
@@ -234,9 +231,8 @@ class TestDesktopCorrection:
         original = make_node(control_type="AXSlider")
         nodes = [original]
 
-        tree._desktop_correction(
-            {"role": "AXSlider", "subrole": "", "rect": Rect(0, 0, 10, 10)}, nodes, "Win"
-        )
+        apply(tree._desktop_correction,
+              {"role": "AXSlider", "subrole": "", "rect": Rect(0, 0, 10, 10)}, nodes)
 
         assert nodes == [original]
 
@@ -257,7 +253,7 @@ class TestOnlyTheLastNodeIsTouched:
         earlier = make_node(name="earlier")
         nodes = [earlier, make_node(name="target")]
 
-        tree._dom_correction({"role": "AXLink", "children": ["<child>"]}, nodes, "Win")
+        apply(tree._dom_correction, {"role": "AXLink", "children": ["<child>"]}, nodes)
 
         assert nodes[0] is earlier
         assert nodes[1].name == "Heading"
