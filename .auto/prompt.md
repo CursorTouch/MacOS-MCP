@@ -17,7 +17,7 @@ Median of 5 full captures. Prints `METRIC ms=<median>`, plus `min_ms` and
 
 ## Metric
 
-`ms` — **lower is better**. Baseline is around 680 ms.
+`ms` — **lower is better**. Baseline was 695.7 ms; currently **103.6 ms**.
 
 Timing noise is roughly ±14% run to run, so a change under ~5% is inside the
 noise. Re-run before believing anything small, and prefer changes with a
@@ -94,33 +94,65 @@ they are avoiding is the fast path.
 Note this is Python-side overhead, not AX IPC wait — meaning it is genuinely
 removable rather than a cost of talking to other processes.
 
+## What the profile looks like now
+
+After experiments #2–#5 the Python-side overhead is essentially gone. Wrapping
+the AX entry point shows **894 batched AX calls at ~339 us each** — that is
+cross-process IPC, not Python. `cProfile` over one capture is now 0.117 s total
+with nothing above 0.009 s except the AX call itself.
+
+**Further gains require making fewer AX round-trips, or overlapping them.**
+Micro-optimising Python will not move this number any more.
+
+## The pattern that produced most of the win
+
+Three separate functions probed a PyObjC bridge object with `hasattr`/`getattr`
+*before* falling back to the correct unboxing call. On an `AXValueRef` a missing
+attribute raises and unwinds through the bridge, costing ~178 us, while
+`AXValueGetValue` costs ~0.8 us — about 200x cheaper. The expensive test was
+guarding the cheap answer.
+
+If you find another `hasattr(` or `getattr(` on an AX value in a hot path,
+that is very likely the next win.
+
 ## Ideas not yet tried
 
 Ordered by expected value.
 
-1. **Unpack AXValue directly instead of probing.** Call `AXValueGetValue` first
-   in `_parse_ax_position`/`_parse_ax_size` and only fall back to the `hasattr`
-   ladder if it fails. Targets the 0.274 s `hasattr` cost head-on.
-2. **Cheaper per-value validation in `GetMultipleAttributeValues`.** 21.5 k
-   `isinstance` calls and an `AXValueGetType` probe per returned value. Reorder
-   so the common case (a real value) exits first.
-3. **Defer geometry parsing.** Position and size are parsed for all 738
-   elements, but elements pruned by role, or hidden, never need a rect. Check
-   the cheap predicates before building `Rect`.
-4. **Cache the bundle → running-application lookup.** `get_nodes` calls
-   `GetRunningApplicationByBundleId` per bundle per capture.
-5. **Reuse the thread pool / `Tree` instance** rather than constructing per
-   capture, if construction shows up.
-6. **Trim the phase-1 attribute list.** `AXIndex` and `AXHelp` were added for
-   interactivity checks — measure whether they earn their place, but note that
-   removing them changes behaviour, so the gate will catch it if they matter.
-7. **Skip menu-bar traversal for system-UI bundles** that contribute nothing,
+1. **Parallelise the walk within one app.** The biggest remaining lever. The
+   traversal is a serial stack walk and each element costs a blocking ~339 us
+   round-trip; Chrome alone accounts for most of the 738 elements. Work is
+   already threaded *per bundle*, but not *within* a bundle. Needs care: AX
+   calls from multiple threads, and node ordering would change (the gate
+   compares sorted sets, so it would **not** catch an ordering change — check
+   that separately if output order matters to consumers).
+2. **Traverse fewer elements.** 738 elements yield 137 nodes. Measure how many
+   are pruned after being fetched, and whether a cheaper predicate could skip
+   them before the batch call.
+3. **Trim the phase-1 attribute list.** Nine attributes are fetched for every
+   element. Fewer attributes may mean a cheaper round-trip — measure whether
+   cost scales with attribute count before assuming it does. Removing one that
+   is genuinely used changes behaviour, and the gate will catch it.
+4. **Cache the bundle → running-application lookup**, and reuse the `Tree` /
+   thread pool across captures rather than constructing per call.
+5. **Skip menu-bar traversal for system-UI bundles** that contribute nothing,
    if the gate confirms no node loss.
-8. **Avoid the double fetch in `GetTraversalBatch`** (early + late again) used
+6. **Avoid the double fetch in `GetTraversalBatch`** (early + late again) used
    by correction helpers — only 16 calls, so small, but free.
+7. **Revisit the zero-area descend added in 17f46ca.** It walks subtrees under
+   collapsed wrappers, which is expensive on DOM-heavy pages. A narrower rule
+   (descend only when the *parent* box is non-degenerate) might recover time
+   without losing the nodes it was added to rescue — the gate will verify.
 
 ## Log
 
 | # | change | ms | status |
 |---|---|---|---|
-| — | baseline | *(pending)* | — |
+| 1 | baseline | 695.7 | keep |
+| 2 | `AXValueGetValue` before `hasattr` in `_parse_ax_position`/`_parse_ax_size`; import hoisted to module level | 253.2 | keep (−63.6%) |
+| 3 | `AXValueGetValue` before `getattr` in `ParseCFRange` — same trap | 178.2 | keep (−74.4%) |
+| 4 | memoise the `isinstance` classification by concrete type in `GetMultipleAttributeValues` | 103.9 | keep (−85.1%) |
+| 5 | materialise the children `NSArray` into a list once | 103.6 | keep — inside noise, retained for fewer bridge calls |
+
+All experiments passed the correctness gate: 137 interactive nodes, fingerprint
+identical to the reference including bounding boxes.
