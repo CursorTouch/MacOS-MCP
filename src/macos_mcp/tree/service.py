@@ -13,7 +13,6 @@ from macos_mcp.tree.views import (
     BoundingBox,
 )
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
 from collections import deque
 from macos_mcp.desktop.config import BROWSER_BUNDLE_IDS, SYSTEM_UI_BUNDLE_IDS
 from macos_mcp.desktop.views import Window
@@ -24,27 +23,6 @@ import objc
 logger = logging.getLogger(__name__)
 
 THREAD_MAX_RETRIES = 3
-
-# Pool used to prefetch phase-1 attribute batches while the walk is busy with
-# the current element. Small on purpose: the aim is to keep a few AX
-# round-trips in flight, not to fan out the whole tree, and every worker is
-# competing for the same target application's accessibility server.
-_PREFETCH_WORKERS = 4
-_prefetch_pool = ThreadPoolExecutor(max_workers=_PREFETCH_WORKERS,
-                                    thread_name_prefix="ax-prefetch")
-
-
-def _prefetch_children(children, prefetch: dict) -> None:
-    """Start phase-1 fetches for children that are not already in flight."""
-    if not children:
-        return
-    for child in children[:_PREFETCH_WORKERS * 2]:
-        key = id(child)
-        if key not in prefetch:
-            try:
-                prefetch[key] = _prefetch_pool.submit(ax.GetEarlyTraversalBatch, child)
-            except RuntimeError:
-                return
 
 # Upper bound on word nodes emitted per text area. Each word costs an
 # AXBoundsForRange round-trip, so an uncapped document can cost more than the
@@ -504,28 +482,11 @@ class Tree:
         # collapsed wrapper is far more likely to be genuinely hidden.
         stack = deque([(root_control.Element, is_browser, True)])
 
-        # Each phase-1 batch is a blocking ~100us cross-process round-trip, and
-        # the walk is otherwise serial. Children are prefetched on a small pool
-        # as soon as they are discovered, so the next element's attributes are
-        # usually already in flight by the time it is popped. DFS pop order --
-        # and therefore the order of emitted nodes -- is unchanged; only the
-        # fetch is overlapped.
-        prefetch: dict[int, Any] = {}
-
-        def _early(el):
-            future = prefetch.pop(id(el), None)
-            if future is None:
-                return ax.GetEarlyTraversalBatch(el)
-            try:
-                return future.result()
-            except Exception:
-                return ax.GetEarlyTraversalBatch(el)
-
         while stack:
             element, current_is_browser, parent_box_ok = stack.pop()
 
             # --- Phase 1: minimal batch for all elements ---
-            early = _early(element)
+            early = ax.GetEarlyTraversalBatch(element)
 
             role = early["role"]
             rect = early["rect"]
@@ -720,4 +681,3 @@ class Tree:
 
             for child_element in reversed(children):
                 stack.append((child_element, current_is_browser, True))
-            _prefetch_children(children, prefetch)
