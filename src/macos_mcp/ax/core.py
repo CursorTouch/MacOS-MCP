@@ -627,10 +627,11 @@ def GetLateTraversalBatch(element: Any) -> dict:
     description = raw.get(Attribute.Description) or ""
     value = raw.get(Attribute.Value)
     value_str = str(value) if value is not None else ""
-    label = title or description or value_str or identifier
     url = raw.get(Attribute.URL)
     filename = raw.get(Attribute.Filename)
     placeholder = raw.get(Attribute.PlaceholderValue)
+    placeholder_str = str(placeholder) if placeholder is not None else ""
+    label = title or description or value_str or placeholder_str or identifier
     return {
         "subrole": raw.get(Attribute.Subrole) or "",
         "title": title,
