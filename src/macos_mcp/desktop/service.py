@@ -410,16 +410,7 @@ class Desktop:
         as_bytes: bool = False,
     ) -> Union[Image.Image, bytes, None]:
         """
-        Capture a screenshot of the screen.
-
-        Uses CoreGraphics directly. Pillow's ImageGrab on macOS shells out to
-        the `screencapture` binary and round-trips a temporary PNG, so it pays
-        for a process spawn plus a PNG encode and decode on every call --
-        roughly 245ms for a 2880x1800 display against roughly 49ms in process.
-
-        Falls back to ImageGrab if CoreGraphics returns nothing, which is what
-        happens without Screen Recording permission and on any OS release where
-        the window-list capture is unavailable.
+        Capture a screenshot of the screen using Pillow ImageGrab.
 
         Args:
             as_bytes: If True, return PNG bytes.
@@ -427,54 +418,12 @@ class Desktop:
         Returns:
             PIL Image, PNG bytes, or None on failure.
         """
-        image = self._capture_via_coregraphics()
-        if image is None:
-            image = ImageGrab.grab(all_screens=True)
+        image = ImageGrab.grab(all_screens=True)
         if as_bytes:
             buf = io.BytesIO()
             image.save(buf, format="PNG")
             return buf.getvalue()
         return image
-
-    @staticmethod
-    def _capture_via_coregraphics() -> Optional[Image.Image]:
-        """Capture all on-screen content as a PIL image, or None if unavailable.
-
-        The buffer CoreGraphics hands back is BGRA with its own row stride,
-        which may exceed width * 4 for alignment -- Image.frombuffer is told
-        the stride explicitly rather than assuming a packed layout.
-        """
-        try:
-            import Quartz
-
-            cg_image = Quartz.CGWindowListCreateImage(
-                Quartz.CGRectInfinite,
-                Quartz.kCGWindowListOptionOnScreenOnly,
-                Quartz.kCGNullWindowID,
-                Quartz.kCGWindowImageDefault,
-            )
-            if cg_image is None:
-                return None
-            width = Quartz.CGImageGetWidth(cg_image)
-            height = Quartz.CGImageGetHeight(cg_image)
-            if not width or not height:
-                return None
-            provider = Quartz.CGImageGetDataProvider(cg_image)
-            data = Quartz.CGDataProviderCopyData(provider)
-            if data is None:
-                return None
-            return Image.frombuffer(
-                "RGBA",
-                (width, height),
-                bytes(data),
-                "raw",
-                "BGRA",
-                Quartz.CGImageGetBytesPerRow(cg_image),
-                1,
-            )
-        except Exception as exc:  # pragma: no cover - platform dependent
-            logger.debug(f"CoreGraphics screenshot unavailable, falling back: {exc}")
-            return None
 
     def get_annotated_screenshot(
         self,
