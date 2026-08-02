@@ -524,6 +524,15 @@ class Tree:
                     main_window_bounding_box, bounding_box
                 )
                 if bounding_box.width == 0 or bounding_box.height == 0:
+                    # The element itself has no clickable area, so it is not
+                    # emitted -- but a collapsed container says nothing about
+                    # its descendants. Instagram positions a floating button
+                    # inside a zero-height wrapper at the page bottom, and
+                    # pruning here removed the whole subtree even though the
+                    # button had a perfectly good rect inside the window.
+                    # Mirrors how a None rect is already handled above.
+                    for child_element in reversed(children):
+                        stack.append((child_element, current_is_browser))
                     continue
 
             if is_interactive:
