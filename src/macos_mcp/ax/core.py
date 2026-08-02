@@ -337,23 +337,25 @@ def ParseCFRange(value: Any) -> Optional[Tuple[int, int]]:
     PyObjC hands back a plain 2-tuple from AXValueGetValue rather than an
     object with .location/.length, but both shapes are handled since the
     representation is not contractual.
+
+    Same ordering trap as _parse_ax_position: `getattr(v, "location", None)`
+    on an AXValueRef is a bridge miss costing ~180us, so it is tried only
+    after AXValueGetValue, not before it.
     """
     if value is None:
         return None
     if isinstance(value, tuple) and len(value) == 2:
         return (int(value[0]), int(value[1]))
+    try:
+        success, raw = AXValueGetValue(value, AXValueType.CFRange, None)
+        if success and raw is not None and raw is not value:
+            return ParseCFRange(raw)
+    except Exception:
+        pass
     location = getattr(value, "location", None)
     length = getattr(value, "length", None)
     if location is not None and length is not None:
         return (int(location), int(length))
-    try:
-        from ApplicationServices import AXValueGetValue
-
-        success, raw = AXValueGetValue(value, AXValueType.CFRange, None)
-        if success and raw is not None:
-            return ParseCFRange(raw)
-    except Exception:
-        pass
     return None
 
 
