@@ -610,6 +610,16 @@ class Tree:
                 if late.get("identifier"):
                     metadata["axidentifier"] = late["identifier"]
 
+                # Close/minimise/zoom/full-screen buttons expose no title,
+                # description, value or identifier, so they are nameless and
+                # any name-based filtering drops them. They belong to the OS
+                # window frame rather than app content, so name them here --
+                # _desktop_correction already does this for native windows, but
+                # browsers take the _dom_correction path and would otherwise
+                # lose their window controls entirely.
+                if not label and (window_subrole := WINDOW_CONTROL_SUBROLES.get(late.get("subrole"))):
+                    label = window_subrole
+
                 node = TreeElementNode(
                     bounding_box=bounding_box,
                     center=center,
