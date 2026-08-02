@@ -564,6 +564,7 @@ _EARLY_TRAVERSAL_ATTRIBUTES = [
     Attribute.Help,
     Attribute.HasPopup,
     Attribute.TitleUIElement,
+    Attribute.Index,
     Attribute.Children,
 ]
 
@@ -605,6 +606,10 @@ def GetEarlyTraversalBatch(element: Any) -> dict:
         "help": raw.get(Attribute.Help) or "",
         "has_popup": raw.get(Attribute.HasPopup) is True,
         "title_ui_element": raw.get(Attribute.TitleUIElement),
+        # Position within the parent container (rows, columns, cells). None when
+        # the element does not implement it. Note that plain menu items answer
+        # this with 0, so `is not None` is a far weaker signal than it looks.
+        "index": raw.get(Attribute.Index),
         "rect": rect,
         "children": raw.get(Attribute.Children) or [],
     }

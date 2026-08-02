@@ -448,8 +448,11 @@ class Tree:
                 (has_roles and early["enabled"])
                 or bool(early["help"])
                 or early["has_popup"]
+                or bool(early["index"])
                 or has_title_ui_element
             ) and is_visible
+
+
 
             bounding_box = BoundingBox.from_bounding_rectangle(rect)
             if main_window_bounding_box:
@@ -484,6 +487,7 @@ class Tree:
                 label = late["label"] or (
                     str(title_ui_element_text) if title_ui_element_text else ""
                 )
+
                 attrs = {**early, **late, "title_ui_element": title_ui_element_text}
 
                 center = bounding_box.get_center()
@@ -495,7 +499,7 @@ class Tree:
                     if value := late["value"]:
                         metadata["value"] = value
 
-                elif role == "AXComboBox" or role == "AXTextArea":
+                elif role in set(["AXComboBox", "AXTextArea", "AXRow"]):
                     if placeholder := late["placeholder"]:
                         metadata["placeholder"] = placeholder
                     if value := late["value"]:
@@ -525,6 +529,7 @@ class Tree:
                         if url.startswith(("file://", "http://", "https://")):
                             metadata["url"] = url
 
+
                 if late.get("identifier"):
                     metadata["axidentifier"] = late["identifier"]
 
@@ -538,6 +543,7 @@ class Tree:
                         metadata=metadata,
                     )
                 )
+
                 if current_is_browser:
                     self._dom_correction(
                         attrs, interactive_nodes, window_name, main_window_bounding_box
@@ -546,6 +552,7 @@ class Tree:
                     self._desktop_correction(
                         attrs, interactive_nodes, window_name, main_window_bounding_box
                     )
+                
 
             if role in SCROLLABLE_ROLES and is_visible:
                 first_child = children[0] if children else None
