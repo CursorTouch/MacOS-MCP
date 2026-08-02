@@ -580,6 +580,10 @@ _LATE_TRAVERSAL_ATTRIBUTES = [
     Attribute.URL,
     Attribute.Filename,
     Attribute.Expanded,
+    # Selection state. Riding along in this batch costs no extra round-trip,
+    # and only text-ish roles ever read it.
+    Attribute.SelectedText,
+    Attribute.SelectedTextRange,
 ]
 
 # Combined list kept for callers that still need a single full batch (e.g. _dom_correction).
@@ -646,6 +650,15 @@ def GetLateTraversalBatch(element: Any) -> dict:
             if raw.get(Attribute.Expanded) is None
             else bool(raw.get(Attribute.Expanded))
         ),
+        # Selection state, for text-ish roles. selected_range is (location,
+        # length); a zero length means a caret rather than a selection, and
+        # None means the element reports no selection at all.
+        "selected_text": (
+            str(raw.get(Attribute.SelectedText))
+            if raw.get(Attribute.SelectedText) is not None
+            else ""
+        ),
+        "selected_range": ParseCFRange(raw.get(Attribute.SelectedTextRange)),
         "label": label,
     }
 

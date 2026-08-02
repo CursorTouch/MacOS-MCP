@@ -91,6 +91,15 @@ WINDOW_CONTROL_SUBROLES = {
     "AXZoomButton": "Zoom Button",
     "AXFullScreenButton": "Full Screen Button",
 }
+
+# Standard text-entry roles. These carry selection state, which tells an agent
+# whether typing would replace existing content or insert at a caret.
+TEXT_INPUT_ROLES = {
+    "AXTextField",
+    "AXTextArea",
+    "AXComboBox",
+    "AXSearchField",
+}
 # Roles that should be skipped during tree traversal to improve performance.
 # These are either pure decorative/structural elements with no interactive children
 # or elements whose subtrees never yield actionable nodes.

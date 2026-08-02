@@ -3,6 +3,7 @@ from macos_mcp.tree.config import (
     SCROLLABLE_ROLES,
     WINDOW_CONTROL_SUBROLES,
     PRUNABLE_ROLES,
+    TEXT_INPUT_ROLES,
 )
 from macos_mcp.tree.views import (
     TreeState,
@@ -591,6 +592,20 @@ class Tree:
                     if url := late["url"]:
                         if url.startswith(("file://", "http://", "https://")):
                             metadata["url"] = url
+
+                # Selection state for text-entry roles, kept out of the
+                # role-specific chain above so it applies uniformly. A caret
+                # (zero-length) is the resting state of every focused field and
+                # would be noise on every node, so only real selections are
+                # reported -- what matters to a caller is whether typing would
+                # replace existing content.
+                if role in TEXT_INPUT_ROLES or late.get("subrole") == "AXSearchField":
+                    selection = late.get("selected_range")
+                    if selection is not None and selection[1] > 0:
+                        metadata["selected_text"] = late.get("selected_text") or ""
+                        total = len(str(late["value"] or ""))
+                        if selection[0] == 0 and total and selection[1] == total:
+                            metadata["all_selected"] = True
 
                 if late.get("identifier"):
                     metadata["axidentifier"] = late["identifier"]
