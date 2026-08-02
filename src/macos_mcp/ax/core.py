@@ -633,7 +633,11 @@ def GetEarlyTraversalBatch(element: Any) -> dict:
         # this with 0, so `is not None` is a far weaker signal than it looks.
         "index": raw.get(Attribute.Index),
         "rect": rect,
-        "children": raw.get(Attribute.Children) or [],
+        # Materialise the NSArray into a Python list once. The traversal takes
+        # len(), reverses and indexes it, and every one of those crosses the
+        # PyObjC bridge -- 3.7k nsarray __iter__/__len__/__getitem__ calls per
+        # capture for what is a fixed sequence.
+        "children": list(raw.get(Attribute.Children) or ()),
     }
 
 
