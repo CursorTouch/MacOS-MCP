@@ -640,7 +640,11 @@ def GetLateTraversalBatch(element: Any) -> dict:
         "placeholder": str(placeholder) if placeholder is not None else None,
         "url": str(url) if url is not None else None,
         "filename": str(filename) if filename is not None else None,
-        "expanded": raw.get(Attribute.Expanded) is True,
+        "expanded": (
+            None
+            if raw.get(Attribute.Expanded) is None
+            else bool(raw.get(Attribute.Expanded))
+        ),
         "label": label,
     }
 

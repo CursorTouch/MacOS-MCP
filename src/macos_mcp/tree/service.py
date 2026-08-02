@@ -503,7 +503,7 @@ class Tree:
                         metadata["placeholder"] = placeholder
                     if value := late["value"]:
                         metadata["value"] = value
-                    if late["expanded"]:
+                    if late["expanded"] is not None:
                         metadata["expanded"] = late["expanded"]
                     if early["has_popup"]:
                         metadata["has_popup"] = early["has_popup"]
@@ -547,7 +547,7 @@ class Tree:
                     else self._desktop_correction
                 )
                 node = correct(attrs, node, window_name, main_window_bounding_box)
-                if node is not None:
+                if node is not None and len(node.name.strip())>0:
                     interactive_nodes.append(node)
 
             if role in SCROLLABLE_ROLES and is_visible:
