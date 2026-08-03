@@ -18,6 +18,7 @@ from macos_mcp.desktop.config import BROWSER_BUNDLE_IDS, SYSTEM_UI_BUNDLE_IDS
 from macos_mcp.desktop.views import Window
 import macos_mcp.ax as ax
 import logging
+from AppKit import NSWorkspace
 import objc
 
 logger = logging.getLogger(__name__)
@@ -43,11 +44,63 @@ class Tree:
 
         logger.debug("Focus changed: notification=%s pid=%d", notification, pid)
 
+    # (running pids) -> bundle ids that own a menu bar extra. Asking every
+    # application for its extras menu bar costs ~7ms, but the answer only
+    # changes when an application starts or quits, so it is cached against the
+    # set of running processes. Enumerating those costs ~0.3ms.
+    _extras_cache: tuple[frozenset, list[str]] | None = None
+
+    @classmethod
+    def _bundles_with_menu_bar_extras(cls) -> list[str]:
+        """Bundle ids of running apps that contribute a menu bar extra.
+
+        Status icons belong to the application that owns them, not to the
+        system UI, so an app like Docker or Ollama is never scanned by the
+        normal rules -- it is neither frontmost nor system UI -- and its icon
+        never reaches a snapshot even though it is plainly visible.
+
+        Only the extras menu bar of these apps is scanned afterwards; walking
+        their full window tree would cost far more than the single node they
+        contribute.
+        """
+        try:
+            running = [
+                app
+                for app in NSWorkspace.sharedWorkspace().runningApplications()
+                # Includes accessory apps (policy 1), which is what most
+                # menu-bar-only tools are.
+                if app.activationPolicy() in (0, 1) and app.bundleIdentifier()
+            ]
+        except Exception as exc:
+            logger.debug(f"could not enumerate running applications: {exc}")
+            return []
+
+        key = frozenset(app.processIdentifier() for app in running)
+        cached = cls._extras_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
+
+        bundle_ids: list[str] = []
+        for app in running:
+            bundle_id = app.bundleIdentifier()
+            if bundle_id in SYSTEM_UI_BUNDLE_IDS:
+                continue
+            try:
+                extras = ax.Control(pid=app.processIdentifier()).ExtrasMenuBar
+                if extras is not None and extras.GetChildren():
+                    bundle_ids.append(bundle_id)
+            except Exception:
+                continue
+
+        cls._extras_cache = (key, bundle_ids)
+        return bundle_ids
+
     def get_state(self, active_window: Window | None) -> TreeState:
         FINDER_BUNDLE_ID = "com.apple.finder"
         bundle_ids: list[str] = []
         system_bundle_ids: list[str] = []
         desktop_only_bundle_ids: list[str] = []
+        extras_only_bundle_ids: list[str] = self._bundles_with_menu_bar_extras()
         for bundle_id in SYSTEM_UI_BUNDLE_IDS:
             if app := ax.GetRunningApplicationByBundleId(bundle_id):
                 system_bundle_ids.append(app.BundleIdentifier)
@@ -72,6 +125,7 @@ class Tree:
                 bundle_ids=bundle_ids,
                 system_bundle_ids=system_bundle_ids,
                 desktop_only_bundle_ids=desktop_only_bundle_ids,
+                extras_only_bundle_ids=extras_only_bundle_ids,
             )
         )
 
@@ -87,6 +141,7 @@ class Tree:
         bundle_ids: list[str],
         system_bundle_ids: list[str] | None = None,
         desktop_only_bundle_ids: list[str] | None = None,
+        extras_only_bundle_ids: list[str] | None = None,
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
@@ -96,22 +151,27 @@ class Tree:
             system_bundle_ids = []
         if desktop_only_bundle_ids is None:
             desktop_only_bundle_ids = []
+        if extras_only_bundle_ids is None:
+            extras_only_bundle_ids = []
 
-        task_inputs: list[tuple[str, bool, bool]] = []
+        task_inputs: list[tuple[str, bool, bool, bool]] = []
         for bundle_id in bundle_ids:
             is_browser = bundle_id in BROWSER_BUNDLE_IDS
-            task_inputs.append((bundle_id, is_browser, False))
+            task_inputs.append((bundle_id, is_browser, False, False))
         for bundle_id in desktop_only_bundle_ids:
             if bundle_id not in bundle_ids:
                 is_browser = bundle_id in BROWSER_BUNDLE_IDS
-                task_inputs.append((bundle_id, is_browser, True))
+                task_inputs.append((bundle_id, is_browser, True, False))
+        for bundle_id in extras_only_bundle_ids:
+            if bundle_id not in bundle_ids:
+                task_inputs.append((bundle_id, False, False, True))
 
         executor = self._executor
-        retry_counts: dict[str, int] = {bid: 0 for bid, _, __ in task_inputs}
+        retry_counts: dict[str, int] = {bid: 0 for bid, _, __, ___ in task_inputs}
         future_to_bundle_id: dict = {}
-        for bid, is_browser, desktop_only in task_inputs:
+        for bid, is_browser, desktop_only, extras_only in task_inputs:
             future = executor.submit(
-                self._get_nodes_pooled, bid, is_browser, desktop_only
+                self._get_nodes_pooled, bid, is_browser, desktop_only, extras_only
             )
             future_to_bundle_id[future] = bid
 
@@ -134,14 +194,12 @@ class Tree:
                         e,
                     )
                     if retry_counts[bundle_id] < THREAD_MAX_RETRIES:
-                        is_browser = next(
-                            (ib for b, ib, _ in task_inputs if b == bundle_id), False
-                        )
-                        desktop_only = next(
-                            (do for b, _, do in task_inputs if b == bundle_id), False
+                        task = next(
+                            (t for t in task_inputs if t[0] == bundle_id),
+                            (bundle_id, False, False, False),
                         )
                         new_future = executor.submit(
-                            self._get_nodes_pooled, bundle_id, is_browser, desktop_only
+                            self._get_nodes_pooled, bundle_id, task[1], task[2], task[3]
                         )
                         future_to_bundle_id[new_future] = bundle_id
                     else:
@@ -155,7 +213,11 @@ class Tree:
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
     def _get_nodes_pooled(
-        self, bundle_id: str, is_browser: bool, desktop_only: bool = False
+        self,
+        bundle_id: str,
+        is_browser: bool,
+        desktop_only: bool = False,
+        extras_only: bool = False,
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         """Run get_nodes inside an autorelease pool on the worker thread.
 
@@ -166,10 +228,14 @@ class Tree:
         lifetime of these long-lived worker threads (a steady memory leak).
         """
         with objc.autorelease_pool():
-            return self.get_nodes(bundle_id, is_browser, desktop_only)
+            return self.get_nodes(bundle_id, is_browser, desktop_only, extras_only)
 
     def get_nodes(
-        self, bundle_id: str, is_browser: bool, desktop_only: bool = False
+        self,
+        bundle_id: str,
+        is_browser: bool,
+        desktop_only: bool = False,
+        extras_only: bool = False,
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         """
         Get interactive and scrollable nodes for an app by bundle_id.
@@ -180,6 +246,11 @@ class Tree:
             is_browser: Whether the app is a browser.
             desktop_only: When True, skip menu bar scanning (used for Finder desktop
                           items when another app owns the menu bar).
+            extras_only: When True, scan only the app's menu bar extras and skip
+                         its menus and windows. Used for background apps that
+                         contribute a status icon but whose own UI is not on
+                         screen -- scanning their full tree would cost far more
+                         than the one node they provide.
         """
         app = ax.GetRunningApplicationByBundleId(bundle_id)
         if not app:
@@ -193,6 +264,18 @@ class Tree:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
+
+        if extras_only:
+            if extras := app.ExtrasMenuBar:
+                self.tree_traversal(
+                    extras,
+                    app_name,
+                    interactive_nodes,
+                    scrollable_nodes,
+                    [],
+                    is_browser=is_browser,
+                )
+            return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
         menubar = None
         extras_menubar = None
@@ -633,6 +716,20 @@ class Tree:
                 # lose their window controls entirely.
                 if not label and (window_subrole := WINDOW_CONTROL_SUBROLES.get(late.get("subrole"))):
                     label = window_subrole
+
+                # Third-party menu bar extras are pure icons: Claude, Docker,
+                # Ollama and LM Studio each expose one AXMenuBarItem with no
+                # title, description, value or identifier, so name-based
+                # filtering drops them despite their being visible with real
+                # geometry. The owning application's name is the only
+                # meaningful thing to call them.
+                #
+                # Only unnamed items are affected, so an app's real menus
+                # (File, Edit, ...) keep their own titles, and Control Centre's
+                # disabled extras stay out because they are already filtered on
+                # geometry -- they sit at (0, 900) with zero size.
+                if not label and role == "AXMenuBarItem":
+                    label = window_name
 
                 node = TreeElementNode(
                     bounding_box=bounding_box,
