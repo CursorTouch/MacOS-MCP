@@ -86,9 +86,12 @@ INTERACTIVE_ACTIONS = {
 
 # Subroles that make an element interactive regardless of its role. A
 # Notification Centre banner is an AXGroup, which is not an interactive role,
-# but it is the thing a user clicks to open the notification.
+# but it is the thing a user clicks to open the notification. WhatsApp's chat
+# search reports AXStaticText for the same reason -- the role describes how the
+# element was built, while the subrole describes what it is for.
 INTERACTIVE_SUBROLES = {
     "AXNotificationCenterBanner",
+    "AXSearchField",
 }
 
 # Window control subroles with friendly names
