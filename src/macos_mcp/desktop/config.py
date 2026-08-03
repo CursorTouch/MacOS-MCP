@@ -24,4 +24,5 @@ SYSTEM_UI_BUNDLE_IDS = {
     "com.apple.controlcenter",  # Control Centre panel
     "com.apple.systemuiserver",  # Menu bar extras (WiFi, battery, clock, etc.)
     "com.apple.Spotlight",
+    "com.apple.notificationcenterui",
 }
