@@ -37,6 +37,20 @@ echo "building ${APP_NAME}.app ${VERSION}"
 rm -rf "${APP}"
 mkdir -p "${APP}/Contents/MacOS" "${APP}/Contents/Resources"
 
+# Background by default: the server is spawned by an MCP host and speaks over
+# stdio, so it has no interface of its own. These keys are only consulted when
+# the bundle is launched through LaunchServices (`open`), not when the host
+# execs the binary directly.
+#
+#   (default)          LSBackgroundOnly -- no Dock icon, cannot show UI
+#   APP_UI=agent       LSUIElement      -- no Dock icon, may show dialogs
+#   APP_UI=foreground  neither          -- ordinary app, appears in the Dock
+case "${APP_UI:-background}" in
+    foreground) UI_KEY="<!-- foreground app: appears in the Dock -->" ;;
+    agent)      UI_KEY="<key>LSUIElement</key>            <true/>" ;;
+    *)          UI_KEY="<key>LSBackgroundOnly</key>       <true/>" ;;
+esac
+
 # --- Info.plist -------------------------------------------------------------
 # CFBundleIdentifier is what TCC keys grants on, so it must not change between
 # releases or every user is re-prompted. The usage descriptions are what the
@@ -55,7 +69,7 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
     <key>CFBundleShortVersionString</key>  <string>${VERSION}</string>
     <key>CFBundleVersion</key>             <string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key>      <string>13.0</string>
-    <key>LSBackgroundOnly</key>            <true/>
+    ${UI_KEY}
     <key>NSAccessibilityUsageDescription</key>
     <string>macOS MCP reads the accessibility tree to describe what is on screen, and clicks and types on your behalf.</string>
     <key>NSAppleEventsUsageDescription</key>
