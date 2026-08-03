@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.16] - 2026-08-03
+
+### Added
+- Menu bar extras owned by background applications are now captured. Status icons for tools like Docker, Ollama, LM Studio and Claude belong to their own process, which is neither frontmost nor system UI, so nothing ever asked them and their icons never reached a snapshot. Applications owning a non-empty `AXExtrasMenuBar` are now discovered and scanned — only their extras menu bar, since walking their full window tree would cost far more than the single node they contribute. Discovery is cached against the set of running process ids, so a repeat capture pays 0.15 ms rather than 7.36 ms
+- Menu bar extras with no name are labelled with the owning application's name. They are pure icons with no title, description, value or identifier, so name-based filtering removed them despite their being visible. Only unnamed items are affected, so an application's real menus keep their own titles, and Control Centre's disabled extras stay out because they are filtered on geometry — they sit at `(0, 900)` with zero size
+- Notification Centre contents are now captured, including the notification banners themselves. It is owned by `com.apple.notificationcenterui`, which was not scanned at all. A banner is an `AXGroup` carrying the subrole `AXNotificationCenterBanner`, so a new `INTERACTIVE_SUBROLES` set makes it interactive regardless of role, and `Subrole` moved into the phase-1 batch since interactivity now depends on it
+
+### Changed
+- Phase 2 now asks only for the attributes a role can actually carry. An attribute an element cannot have still costs work, because the application has to answer "unsupported" for each one — against Control Centre's status items five of eleven were never answered, and dropping them halved that fetch. Which attributes can be answered is a property of the role rather than of the application: a menu bar item structurally has no URL, a link has no text selection. Control Centre's scan went from 25.5 ms to 19.4 ms
+
 ## [0.3.15] - 2026-08-03
 
 ### Changed
