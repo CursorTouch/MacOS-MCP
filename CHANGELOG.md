@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.15] - 2026-08-03
+
+### Changed
+- Desktop state capture is roughly 10x faster, and far more than that on complex pages. A browser window plus the system UI went from 695.7 ms to about 69 ms; measured against the previous release on a heavy DOM page it went from 18.0 s to 0.83 s, a 21.8x improvement. The captured node set is unchanged — verified entry by entry, including bounding boxes, on both workloads
+- Three AXValue parsers asked `hasattr`/`getattr` before falling back to the correct unboxing call. On an `AXValueRef` a missing attribute raises and unwinds through the PyObjC bridge at roughly 178 µs, while `AXValueGetValue` costs roughly 0.8 µs, so the expensive probe was guarding the cheap answer — twice per element. `_parse_ax_position`, `_parse_ax_size` and `ParseCFRange` now unbox first. This alone accounted for two thirds of capture time
+- `GetMultipleAttributeValues` no longer runs `isinstance` against a six-type tuple for every returned value. That check costs about 3.6 µs on a PyObjC bridge type and ran roughly 8000 times per capture, but its answer depends only on the concrete type, of which PyObjC returns very few. The classification is memoised per type; semantics are unchanged, including `bool` being an `int` subclass
+- Traversal no longer descends into every collapsed container. The zero-area rule added in 0.3.14 stopped a degenerate box from pruning its subtree, which fixed real node loss but walked every collapsed wrapper on a page — expensive on DOM-heavy sites. It now descends only when the parent had a usable box, which is the overlay pattern that needed rescuing, and not when a collapsed wrapper sits inside another. Elements walked dropped from 738 to 409 with no node lost, recovering the capture-time regression 0.3.14 introduced
+- The children array from an accessibility batch is materialised into a list once, rather than being re-crossed over the PyObjC bridge by each `len()`, `reversed()` and index
+
 ## [0.3.14] - 2026-08-03
 
 ### Added
