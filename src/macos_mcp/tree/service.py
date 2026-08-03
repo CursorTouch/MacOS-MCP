@@ -81,17 +81,37 @@ class Tree:
         if cached is not None and cached[0] == key:
             return cached[1]
 
-        bundle_ids: list[str] = []
-        for app in running:
-            bundle_id = app.bundleIdentifier()
-            if bundle_id in SYSTEM_UI_BUNDLE_IDS:
-                continue
+        candidates = [
+            app
+            for app in running
+            if app.bundleIdentifier() not in SYSTEM_UI_BUNDLE_IDS
+        ]
+
+        def _has_extras(app):
             try:
                 extras = ax.Control(pid=app.processIdentifier()).ExtrasMenuBar
                 if extras is not None and extras.GetChildren():
-                    bundle_ids.append(bundle_id)
+                    return app.bundleIdentifier()
             except Exception:
-                continue
+                pass
+            return None
+
+        # Probed in parallel. The first accessibility call to a process is far
+        # more expensive than later ones -- roughly 8ms against microseconds --
+        # because the connection has to be established, and there are ~50
+        # running processes to ask. Serially that is over a second on a cold
+        # start; concurrently it is about 200ms.
+        #
+        # Unlike parallelising work inside a single application, which does not
+        # help because one accessibility server answers serially, these are
+        # separate processes and genuinely respond at the same time.
+        bundle_ids: list[str] = []
+        if candidates:
+            with ThreadPoolExecutor(
+                max_workers=min(12, len(candidates)),
+                thread_name_prefix="ax-extras-probe",
+            ) as pool:
+                bundle_ids = [b for b in pool.map(_has_extras, candidates) if b]
 
         cls._extras_cache = (key, bundle_ids)
         return bundle_ids
