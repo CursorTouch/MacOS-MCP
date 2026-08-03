@@ -4,6 +4,7 @@ from macos_mcp.tree.views import BoundingBox, TreeElementNode
 from PIL import Image, ImageDraw, ImageFont, ImageGrab
 from typing import Literal, Optional, Tuple, Union
 from macos_mcp.tree.service import Tree
+from concurrent.futures import ThreadPoolExecutor
 import macos_mcp.ax as ax
 import requests
 import logging
@@ -350,11 +351,10 @@ class Desktop:
         # Get all regular (Dock-visible) applications
         apps = ax.GetRunningApplications(policy="Regular")
 
-        windows = []
-        for app in apps:
+        def _describe(app) -> Optional[Window]:
             bundle_id = app.BundleIdentifier or ""
             if bundle_id in EXCLUDED_BUNDLE_IDS:
-                continue
+                return None
 
             app_name = app.Name or ""
             pid = app.PID
@@ -367,43 +367,47 @@ class Desktop:
             except ValueError:
                 status = Status.WINDOWLESS
 
+            empty = BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
             # Get bounding box from the main window (if any)
             if status in (Status.HIDDEN, Status.MINIMIZED, Status.WINDOWLESS):
-                bbox = BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0)
+                bbox = empty
             else:
                 main_window = app.MainWindow
-                if main_window:
-                    rect = main_window.BoundingRectangle
-                    if rect:
-                        bbox = BoundingBox(
-                            left=int(rect.left),
-                            top=int(rect.top),
-                            right=int(rect.right),
-                            bottom=int(rect.bottom),
-                            width=int(rect.width),
-                            height=int(rect.height),
-                        )
-                    else:
-                        bbox = BoundingBox(
-                            left=0, top=0, right=0, bottom=0, width=0, height=0
-                        )
-                else:
-                    bbox = BoundingBox(
-                        left=0, top=0, right=0, bottom=0, width=0, height=0
+                rect = main_window.BoundingRectangle if main_window else None
+                bbox = (
+                    BoundingBox(
+                        left=int(rect.left),
+                        top=int(rect.top),
+                        right=int(rect.right),
+                        bottom=int(rect.bottom),
+                        width=int(rect.width),
+                        height=int(rect.height),
                     )
-
-            windows.append(
-                Window(
-                    name=app_name,
-                    is_browser=is_browser,
-                    status=status,
-                    bounding_box=bbox,
-                    pid=pid,
-                    bundle_id=bundle_id,
+                    if rect
+                    else empty
                 )
+
+            return Window(
+                name=app_name,
+                is_browser=is_browser,
+                status=status,
+                bounding_box=bbox,
+                pid=pid,
+                bundle_id=bundle_id,
             )
 
-        return windows
+        # Each application is several accessibility calls, and the first call to
+        # a process costs far more than later ones because the connection has to
+        # be established. Serially that dominates a cold capture; these are
+        # separate processes, so they answer concurrently.
+        if not apps:
+            return []
+        with ThreadPoolExecutor(
+            max_workers=min(12, len(apps)), thread_name_prefix="ax-window-scan"
+        ) as pool:
+            described = list(pool.map(_describe, apps))
+
+        return [window for window in described if window is not None]
 
     def get_screenshot(
         self,
