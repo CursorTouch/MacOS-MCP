@@ -639,7 +639,7 @@ class Tree:
 
             if is_interactive:
                 # --- Phase 2: display/metadata attributes, only for interactive elements ---
-                late = ax.GetLateTraversalBatch(element)
+                late = ax.GetLateTraversalBatch(element, role)
 
                 # Resolve TitleUIElement ref (fetched in phase 1) to its display text.
                 title_ui_element_text = None
