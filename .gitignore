@@ -11,3 +11,6 @@ dist/
 *.egg-info/
 .tau/
 .auto/
+
+# frozen app build
+/build/
