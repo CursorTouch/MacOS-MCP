@@ -84,6 +84,13 @@ INTERACTIVE_ACTIONS = {
     "AXRaise",
 }
 
+# Subroles that make an element interactive regardless of its role. A
+# Notification Centre banner is an AXGroup, which is not an interactive role,
+# but it is the thing a user clicks to open the notification.
+INTERACTIVE_SUBROLES = {
+    "AXNotificationCenterBanner",
+}
+
 # Window control subroles with friendly names
 WINDOW_CONTROL_SUBROLES = {
     "AXCloseButton": "Close Button",

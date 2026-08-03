@@ -1,5 +1,6 @@
 from macos_mcp.tree.config import (
     INTERACTIVE_ROLES,
+    INTERACTIVE_SUBROLES,
     SCROLLABLE_ROLES,
     WINDOW_CONTROL_SUBROLES,
     PRUNABLE_ROLES,
@@ -595,12 +596,25 @@ class Tree:
 
             has_roles = (role in INTERACTIVE_ROLES) or (role == "AXImage")
             has_title_ui_element = bool(early["title_ui_element"])
+
+            # Some elements are clickable without adopting an interactive role.
+            # A Notification Centre banner is an AXGroup carrying the subrole
+            # AXNotificationCenterBanner.
+            #
+            # Note this is matched on subrole rather than on "advertises an
+            # AXPress action": Electron applications attach press actions to
+            # wrapper elements liberally, and using actions as the signal added
+            # 118 nodes to a 95-node capture -- mostly AXGroup and AXStaticText
+            # containers, including icon-font glyphs as names.
+            has_interactive_subrole = early["subrole"] in INTERACTIVE_SUBROLES
+
             is_interactive = (
                 (has_roles and early["enabled"])
                 or bool(early["help"])
                 or early["has_popup"]
                 or bool(early["index"])
                 or has_title_ui_element
+                or has_interactive_subrole
             ) and is_visible
 
 
@@ -696,7 +710,7 @@ class Tree:
                 # would be noise on every node, so only real selections are
                 # reported -- what matters to a caller is whether typing would
                 # replace existing content.
-                if role in TEXT_INPUT_ROLES or late.get("subrole") == "AXSearchField":
+                if role in TEXT_INPUT_ROLES or early["subrole"] == "AXSearchField":
                     selection = late.get("selected_range")
                     if selection is not None and selection[1] > 0:
                         metadata["selected_text"] = late.get("selected_text") or ""
@@ -714,7 +728,7 @@ class Tree:
                 # _desktop_correction already does this for native windows, but
                 # browsers take the _dom_correction path and would otherwise
                 # lose their window controls entirely.
-                if not label and (window_subrole := WINDOW_CONTROL_SUBROLES.get(late.get("subrole"))):
+                if not label and (window_subrole := WINDOW_CONTROL_SUBROLES.get(early["subrole"])):
                     label = window_subrole
 
                 # Third-party menu bar extras are pure icons: Claude, Docker,
