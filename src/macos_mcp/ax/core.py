@@ -582,6 +582,7 @@ _EARLY_TRAVERSAL_ATTRIBUTES = [
     Attribute.Help,
     Attribute.HasPopup,
     Attribute.TitleUIElement,
+    Attribute.Subrole,
     Attribute.Index,
     Attribute.Children,
 ]
@@ -589,7 +590,6 @@ _EARLY_TRAVERSAL_ATTRIBUTES = [
 # Phase-2 attributes fetched only for elements that pass the interactive check.
 # These are skipped for the ~90-95% of non-interactive container/leaf elements.
 _LATE_TRAVERSAL_ATTRIBUTES = [
-    Attribute.Subrole,
     Attribute.Title,
     Attribute.Description,
     Attribute.Identifier,
@@ -628,6 +628,8 @@ def GetEarlyTraversalBatch(element: Any) -> dict:
         "help": raw.get(Attribute.Help) or "",
         "has_popup": raw.get(Attribute.HasPopup) is True,
         "title_ui_element": raw.get(Attribute.TitleUIElement),
+        # Needed in phase 1: some subroles decide interactivity.
+        "subrole": raw.get(Attribute.Subrole) or "",
         # Position within the parent container (rows, columns, cells). None when
         # the element does not implement it. Note that plain menu items answer
         # this with 0, so `is not None` is a far weaker signal than it looks.
@@ -659,7 +661,9 @@ def GetLateTraversalBatch(element: Any) -> dict:
     placeholder_str = str(placeholder) if placeholder is not None else ""
     label = title or description or value_str or placeholder_str or identifier
     return {
-        "subrole": raw.get(Attribute.Subrole) or "",
+        # subrole is fetched in phase 1 (interactivity depends on it), so it is
+        # deliberately absent here -- returning an empty one would clobber the
+        # real value when the two batches are merged.
         "title": title,
         "description": description,
         "identifier": identifier,
