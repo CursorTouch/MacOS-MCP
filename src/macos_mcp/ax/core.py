@@ -617,7 +617,10 @@ _TRAVERSAL_ATTRIBUTES = _EARLY_TRAVERSAL_ATTRIBUTES + _LATE_TRAVERSAL_ATTRIBUTES
 # application: a menu bar item has no URL and no placeholder, a link has no
 # selection. So phase 2 asks only for what the role can actually carry.
 _LATE_ALWAYS = [
-    Attribute.Subrole,
+    # Subrole is deliberately absent: it is fetched in phase 1, because
+    # interactivity depends on it (AXNotificationCenterBanner). Asking again
+    # here would be a duplicate round-trip, and returning it would clobber the
+    # phase-1 value when the two batches are merged.
     Attribute.Title,
     Attribute.Description,
     Attribute.Identifier,
