@@ -238,6 +238,7 @@ from .events import (
 )
 
 __all__ = [
+    "FormatMenuShortcut",
     # Enums
     "AXError",
     "AXErrorNames",

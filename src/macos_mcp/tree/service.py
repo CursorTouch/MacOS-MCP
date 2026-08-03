@@ -720,6 +720,10 @@ class Tree:
                     if value := late["value"]:
                         metadata["selected"] = value
 
+                elif role in ("AXMenuItem", "AXMenuBarItem"):
+                    if shortcut := late["shortcut"]:
+                        metadata["shortcut"] = shortcut
+
                 elif role == "AXCheckBox":
                     # 0 off, 1 on, 2 mixed -- the third state is what a "select
                     # all" box shows when only some of its items are selected.

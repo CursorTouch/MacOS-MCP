@@ -641,6 +641,15 @@ _TEXTUAL_ROLES = frozenset(
 )
 _LINKLIKE_ROLES = frozenset({"AXLink", "AXImage"})
 
+# Keyboard equivalents, which only menu items carry. Fetched for menu roles
+# alone, so every other element pays nothing for them.
+_LATE_MENU = [
+    Attribute.MenuItemCmdChar,
+    Attribute.MenuItemCmdModifiers,
+    Attribute.MenuItemCmdVirtualKey,
+]
+_MENU_ROLES = frozenset({"AXMenuItem", "AXMenuBarItem"})
+
 
 def _late_attributes_for(role: str) -> list:
     """Phase-2 attribute list appropriate to a role."""
@@ -649,7 +658,78 @@ def _late_attributes_for(role: str) -> list:
         attributes += _LATE_TEXTUAL
     if role in _LINKLIKE_ROLES:
         attributes += _LATE_LINKLIKE
+    if role in _MENU_ROLES:
+        attributes += _LATE_MENU
     return attributes
+
+
+# Virtual key codes for keys with no printable character. Only the ones that
+# actually turn up as menu equivalents are listed.
+_VIRTUAL_KEYS = {
+    36: "\u21a9",   # return
+    48: "\u21e5",   # tab
+    49: "Space",
+    51: "\u232b",   # delete (backspace)
+    53: "\u238b",   # escape
+    76: "\u2324",   # enter
+    115: "\u2196",  # home
+    116: "\u21de",  # page up
+    117: "\u2326",  # forward delete
+    119: "\u2198",  # end
+    121: "\u21df",  # page down
+    123: "\u2190",
+    124: "\u2192",
+    125: "\u2193",
+    126: "\u2191",
+    122: "F1", 120: "F2", 99: "F3", 118: "F4", 96: "F5", 97: "F6",
+    98: "F7", 100: "F8", 101: "F9", 109: "F10", 103: "F11", 111: "F12",
+}
+
+# Control characters that arrive through AXMenuItemCmdChar rather than as a
+# virtual key.
+_CONTROL_CHARS = {
+    "\x08": "\u232b",
+    "\x1b": "\u238b",
+    "\r": "\u21a9",
+    "\t": "\u21e5",
+    "\x03": "\u2324",
+}
+
+
+def FormatMenuShortcut(char: Any, modifiers: Any, virtual_key: Any) -> str:
+    """
+    Render a menu item's keyboard equivalent, e.g. "\u21e7\u2318N".
+
+    The modifier mask is not a plain list of held keys. Bit 3 means *no*
+    command, so command is implied whenever it is clear -- a mask of 0 is
+    command on its own, not "no modifiers at all". Bit 4 is the fn/globe key,
+    which is undocumented alongside the other four but is what macOS window
+    tiling uses: Fill is fn-control-F, and reading the mask without it would
+    render that as a bare F.
+    """
+    mask = 0 if modifiers is None else int(modifiers)
+
+    key = _VIRTUAL_KEYS.get(virtual_key) if virtual_key is not None else None
+    if key is None and char:
+        char = str(char)
+        key = _CONTROL_CHARS.get(char) or (
+            char if char.isprintable() and char.strip() else ""
+        )
+    if not key:
+        return ""
+
+    parts = []
+    if mask & 16:
+        parts.append("\U0001f310")  # fn / globe
+    if mask & 4:
+        parts.append("\u2303")  # control
+    if mask & 2:
+        parts.append("\u2325")  # option
+    if mask & 1:
+        parts.append("\u21e7")  # shift
+    if not mask & 8:
+        parts.append("\u2318")  # command
+    return "".join(parts) + (key.upper() if len(key) == 1 else key)
 
 
 def GetEarlyTraversalBatch(element: Any) -> dict:
@@ -711,6 +791,12 @@ def GetLateTraversalBatch(element: Any, role: str | None = None) -> dict:
         # real value when the two batches are merged.
         "title": title,
         "description": description,
+        # Empty for everything that is not a menu item.
+        "shortcut": FormatMenuShortcut(
+            raw.get(Attribute.MenuItemCmdChar),
+            raw.get(Attribute.MenuItemCmdModifiers),
+            raw.get(Attribute.MenuItemCmdVirtualKey),
+        ),
         "identifier": identifier,
         "value": value,
         "placeholder": str(placeholder) if placeholder is not None else None,
