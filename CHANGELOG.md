@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-08-03
+
+### Changed
+- The first capture in a process is about 3.2x faster, roughly 1290ms down to 420ms. The cost was first contact with each application: the first accessibility call to a process takes around 8ms because the connection has to be established, while later calls take microseconds, and two functions asked every one of the ~50 running applications in turn — `_bundles_with_menu_bar_extras` at 0.80s and `get_windows` at 0.46s. Both now probe concurrently. Captures after the first are unchanged at around 75ms, and the output is identical
+
 ## [0.3.16] - 2026-08-03
 
 ### Added
