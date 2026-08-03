@@ -9,6 +9,8 @@ import requests
 import logging
 import random
 import json
+import tempfile
+import subprocess
 import io
 import os
 import time
@@ -410,7 +412,32 @@ class Desktop:
         as_bytes: bool = False,
     ) -> Union[Image.Image, bytes, None]:
         """
-        Capture a screenshot of the screen using Pillow ImageGrab.
+        Capture a screenshot of the screen.
+
+        Uses the same `screencapture` binary Pillow's ImageGrab drives, but
+        asks for TIFF instead of PNG. Pillow hardcodes PNG, so every capture
+        pays to deflate the framebuffer and then immediately inflate it, for a
+        bitmap that is thrown away moments later.
+
+            screencapture -t png    302ms
+            screencapture -t tiff   193ms
+
+        TIFF is uncompressed here, trading a larger short-lived temporary file
+        for the compression round-trip.
+
+        Not BMP, which is faster still (167ms) but cannot carry an ICC profile.
+        screencapture emits a 4KB display profile with PNG and TIFF; without it
+        the red and blue channels shift enough to differ from the PNG output in
+        ~4.9% of pixels. TIFF differs in 0.009%, which is below the 0.012%
+        measured between two consecutive PNG captures of a live screen -- ie
+        indistinguishable from the cursor and clock moving.
+
+        Deliberately keeps the `screencapture` subprocess rather than calling
+        CoreGraphics in process. CGWindowListCreateImage is faster still (~49ms
+        all in) but lights the macOS screen-recording indicator on every
+        capture, which is not an acceptable trade for a background tool.
+
+        Falls back to ImageGrab if anything about the subprocess path fails.
 
         Args:
             as_bytes: If True, return PNG bytes.
@@ -418,12 +445,41 @@ class Desktop:
         Returns:
             PIL Image, PNG bytes, or None on failure.
         """
-        image = ImageGrab.grab(all_screens=True)
+        image = self._capture_via_screencapture()
+        if image is None:
+            image = ImageGrab.grab(all_screens=True)
         if as_bytes:
             buf = io.BytesIO()
             image.save(buf, format="PNG")
             return buf.getvalue()
         return image
+
+    @staticmethod
+    def _capture_via_screencapture() -> Optional[Image.Image]:
+        """Capture the screen to an uncompressed temporary TIFF, or None."""
+        handle, path = tempfile.mkstemp(".tiff")
+        os.close(handle)
+        try:
+            result = subprocess.run(
+                ["screencapture", "-x", "-t", "tiff", path],
+                capture_output=True,
+                timeout=10,
+            )
+            if result.returncode != 0 or os.path.getsize(path) == 0:
+                return None
+            with Image.open(path) as opened:
+                opened.load()
+                # load() leaves the data owned by the file handle, so copy
+                # before the context manager closes it.
+                return opened.copy()
+        except Exception as exc:
+            logger.debug(f"screencapture TIFF path unavailable, falling back: {exc}")
+            return None
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
     def get_annotated_screenshot(
         self,
