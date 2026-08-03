@@ -1,6 +1,7 @@
 from macos_mcp.tree.config import (
     INTERACTIVE_ROLES,
     INTERACTIVE_SUBROLES,
+    STATE_VALUED_ROLES,
     SCROLLABLE_ROLES,
     WINDOW_CONTROL_SUBROLES,
     PRUNABLE_ROLES,
@@ -679,9 +680,20 @@ class Tree:
                         or None
                     )
 
-                label = late["label"] or (
+                linked_title = (
                     str(title_ui_element_text) if title_ui_element_text else ""
                 )
+                if role in STATE_VALUED_ROLES:
+                    # AXValue here is the state, not a name, so it is skipped:
+                    # a switch reporting 1 would otherwise be labelled "1".
+                    label = (
+                        late["title"]
+                        or late["description"]
+                        or linked_title
+                        or late["identifier"]
+                    )
+                else:
+                    label = late["label"] or linked_title
 
                 attrs = {**early, **late, "title_ui_element": title_ui_element_text}
 
@@ -707,6 +719,19 @@ class Tree:
                 elif role == "AXRadioButton":
                     if value := late["value"]:
                         metadata["selected"] = value
+
+                elif role == "AXCheckBox":
+                    # 0 off, 1 on, 2 mixed -- the third state is what a "select
+                    # all" box shows when only some of its items are selected.
+                    if (value := late["value"]) is not None:
+                        try:
+                            state = int(value)
+                        except (TypeError, ValueError):
+                            state = None
+                        if state is not None:
+                            metadata["checked"] = (
+                                "mixed" if state == 2 else bool(state)
+                            )
 
                 elif role == "AXPopUpButton":
                     if title_ui_element_text:

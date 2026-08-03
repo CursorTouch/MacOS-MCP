@@ -94,6 +94,16 @@ INTERACTIVE_SUBROLES = {
     "AXSearchField",
 }
 
+# Roles whose AXValue is a state rather than a name. A checkbox reports 1 when
+# it is on, so using the value as a label yields a node called "1" -- true, but
+# no use to anyone deciding what to click. For these the linked title element
+# is the name, and the value belongs in metadata as state.
+STATE_VALUED_ROLES = {
+    "AXCheckBox",
+    "AXRadioButton",
+    "AXDisclosureTriangle",
+}
+
 # Window control subroles with friendly names
 WINDOW_CONTROL_SUBROLES = {
     "AXCloseButton": "Close Button",
