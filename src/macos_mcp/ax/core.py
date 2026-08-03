@@ -82,6 +82,7 @@ from ApplicationServices import (
     AXIsProcessTrustedWithOptions,
     AXValueCreate,
     AXValueGetType,
+    AXValueGetValue,
     kAXErrorSuccess,
     kAXCopyMultipleAttributeOptionStopOnError,
 )
@@ -336,23 +337,25 @@ def ParseCFRange(value: Any) -> Optional[Tuple[int, int]]:
     PyObjC hands back a plain 2-tuple from AXValueGetValue rather than an
     object with .location/.length, but both shapes are handled since the
     representation is not contractual.
+
+    Same ordering trap as _parse_ax_position: `getattr(v, "location", None)`
+    on an AXValueRef is a bridge miss costing ~180us, so it is tried only
+    after AXValueGetValue, not before it.
     """
     if value is None:
         return None
     if isinstance(value, tuple) and len(value) == 2:
         return (int(value[0]), int(value[1]))
+    try:
+        success, raw = AXValueGetValue(value, AXValueType.CFRange, None)
+        if success and raw is not None and raw is not value:
+            return ParseCFRange(raw)
+    except Exception:
+        pass
     location = getattr(value, "location", None)
     length = getattr(value, "length", None)
     if location is not None and length is not None:
         return (int(location), int(length))
-    try:
-        from ApplicationServices import AXValueGetValue
-
-        success, raw = AXValueGetValue(value, AXValueType.CFRange, None)
-        if success and raw is not None:
-            return ParseCFRange(raw)
-    except Exception:
-        pass
     return None
 
 
@@ -460,19 +463,30 @@ def GetChildren(element: Any) -> list[Any]:
 
 
 def _parse_ax_position(pos_val) -> Optional[Tuple[float, float]]:
-    """Parse a position from a raw AXValue that has already been fetched."""
+    """Parse a position from a raw AXValue that has already been fetched.
+
+    Order matters enormously here. `hasattr` on an AXValueRef costs about
+    178us, because a missing attribute on a PyObjC bridge object raises and
+    unwinds through the bridge, while AXValueGetValue costs about 0.8us --
+    roughly 200x cheaper. Probing with hasattr first, then falling through to
+    AXValueGetValue, meant paying the expensive test to discover that the cheap
+    answer was the right one. Position and size are parsed once per element, so
+    this dominated capture time.
+    """
     if pos_val is None:
         return None
-    if hasattr(pos_val, "x") and hasattr(pos_val, "y"):
-        return (pos_val.x, pos_val.y)
     try:
-        from ApplicationServices import AXValueGetValue
-
         success, point = AXValueGetValue(pos_val, AXValueType.CGPoint, None)
         if success and point is not None:
-            if hasattr(point, "x") and hasattr(point, "y"):
-                return (point.x, point.y)
+            return (point.x, point.y)
     except Exception:
+        pass
+    # Already-unwrapped CGPoint. try/except rather than hasattr: when the
+    # attribute exists this costs nothing, and we only reach here when the
+    # value was not an AXValueRef.
+    try:
+        return (pos_val.x, pos_val.y)
+    except AttributeError:
         pass
     if hasattr(pos_val, "getValue_size_type_") or str(pos_val).startswith("<AXValue"):
         desc = str(pos_val)
@@ -493,19 +507,23 @@ def _parse_ax_position(pos_val) -> Optional[Tuple[float, float]]:
 
 
 def _parse_ax_size(size_val) -> Optional[Tuple[float, float]]:
-    """Parse a size from a raw AXValue that has already been fetched."""
+    """Parse a size from a raw AXValue that has already been fetched.
+
+    Same ordering argument as _parse_ax_position: ask AXValueGetValue first,
+    because probing an AXValueRef with hasattr costs ~200x more than the call
+    it was guarding.
+    """
     if size_val is None:
         return None
-    if hasattr(size_val, "width") and hasattr(size_val, "height"):
-        return (size_val.width, size_val.height)
     try:
-        from ApplicationServices import AXValueGetValue
-
         success, size = AXValueGetValue(size_val, AXValueType.CGSize, None)
         if success and size is not None:
-            if hasattr(size, "width") and hasattr(size, "height"):
-                return (size.width, size.height)
+            return (size.width, size.height)
     except Exception:
+        pass
+    try:
+        return (size_val.width, size_val.height)
+    except AttributeError:
         pass
     try:
         if len(size_val) == 2:
@@ -615,7 +633,11 @@ def GetEarlyTraversalBatch(element: Any) -> dict:
         # this with 0, so `is not None` is a far weaker signal than it looks.
         "index": raw.get(Attribute.Index),
         "rect": rect,
-        "children": raw.get(Attribute.Children) or [],
+        # Materialise the NSArray into a Python list once. The traversal takes
+        # len(), reverses and indexes it, and every one of those crosses the
+        # PyObjC bridge -- 3.7k nsarray __iter__/__len__/__getitem__ calls per
+        # capture for what is a fixed sequence.
+        "children": list(raw.get(Attribute.Children) or ()),
     }
 
 
@@ -715,6 +737,10 @@ def GetElementPid(element: Any) -> Optional[int]:
     return None
 
 
+# Concrete type -> (is_int, is_plain), memoised for GetMultipleAttributeValues.
+# Bounded in practice: PyObjC returns only a handful of distinct types here.
+_VALUE_TYPE_CACHE: dict[type, Tuple[bool, bool]] = {}
+
 def GetMultipleAttributeValues(
     element: Any,
     attributes: Sequence[str],
@@ -746,10 +772,25 @@ def GetMultipleAttributeValues(
                 # ints or AXValue objects of type kAXValueAXErrorType (5).
                 if val is None:
                     continue
-                if isinstance(val, int) and val < 0:
+                # isinstance against a bridge type costs ~3.6us here and this
+                # loop runs ~8k times per capture, but the answer depends only
+                # on the concrete type -- and PyObjC returns a handful of them
+                # (AXValueRef, bool, pyobjc_unicode, __NSArrayM). Decide once
+                # per type, then it is a dict lookup.
+                value_type = type(val)
+                classified = _VALUE_TYPE_CACHE.get(value_type)
+                if classified is None:
+                    classified = (
+                        isinstance(val, int),
+                        isinstance(val, (str, bool, int, float, list, dict)),
+                    )
+                    _VALUE_TYPE_CACHE[value_type] = classified
+                is_int, is_plain = classified
+
+                if is_int and val < 0:
                     continue
                 # Detect AXValue error objects (kAXValueAXErrorType = 5)
-                if not isinstance(val, (str, bool, int, float, list, dict)):
+                if not is_plain:
                     try:
                         if AXValueGetType(val) == AXValueType.AXError:
                             continue

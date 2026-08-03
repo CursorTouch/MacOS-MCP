@@ -476,10 +476,14 @@ class Tree:
           Phase 2 (interactive elements only, ~5-10%): 9 display/metadata attributes.
         This avoids marshalling string attributes for the ~90% of non-interactive nodes.
         """
-        stack = deque([(root_control.Element, is_browser)])
+        # Third element: whether this node's parent had a usable box. A
+        # collapsed wrapper directly inside a real container is the overlay
+        # pattern worth descending into; a collapsed wrapper inside another
+        # collapsed wrapper is far more likely to be genuinely hidden.
+        stack = deque([(root_control.Element, is_browser, True)])
 
         while stack:
-            element, current_is_browser = stack.pop()
+            element, current_is_browser, parent_box_ok = stack.pop()
 
             # --- Phase 1: minimal batch for all elements ---
             early = ax.GetEarlyTraversalBatch(element)
@@ -493,7 +497,7 @@ class Tree:
 
             if rect is None:
                 for child_element in reversed(children):
-                    stack.append((child_element, current_is_browser))
+                    stack.append((child_element, current_is_browser, parent_box_ok))
                 continue
 
             is_visible = rect.width > 1 and rect.height > 1
@@ -531,8 +535,9 @@ class Tree:
                     # pruning here removed the whole subtree even though the
                     # button had a perfectly good rect inside the window.
                     # Mirrors how a None rect is already handled above.
-                    for child_element in reversed(children):
-                        stack.append((child_element, current_is_browser))
+                    if parent_box_ok:
+                        for child_element in reversed(children):
+                            stack.append((child_element, current_is_browser, False))
                     continue
 
             if is_interactive:
@@ -675,4 +680,4 @@ class Tree:
                 )
 
             for child_element in reversed(children):
-                stack.append((child_element, current_is_browser))
+                stack.append((child_element, current_is_browser, True))
