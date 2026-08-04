@@ -6,6 +6,7 @@ from typing import Literal, Optional, Tuple, Union
 from macos_mcp.tree.service import Tree
 from concurrent.futures import ThreadPoolExecutor
 import macos_mcp.ax as ax
+import asyncio
 import requests
 import logging
 import random
@@ -584,3 +585,100 @@ class Desktop:
             padded.save(buf, format="PNG")
             return buf.getvalue()
         return padded
+
+    # =========================================================================
+    # Async wrappers
+    #
+    # Every method below offloads its work so that the uvicorn event loop is
+    # never blocked.  execute_command_async uses the native asyncio subprocess
+    # API; the rest delegate to asyncio.to_thread so that pyobjc / Quartz /
+    # Pillow calls (which hold the GIL or do blocking I/O) run in a thread-pool
+    # worker.
+    # =========================================================================
+
+    async def execute_command_async(
+        self,
+        command: str,
+        mode: Literal["shell", "osascript"] = "shell",
+        timeout: int = 10,
+    ) -> Tuple[str, int]:
+        """Async version — uses asyncio subprocess, never blocks the loop."""
+        return await ax.AsyncExecuteCommand(command, mode=mode, timeout=timeout)
+
+    async def get_state_async(
+        self,
+        use_vision: bool = False,
+        as_bytes: bool = False,
+        scale: float = 1.0,
+    ):
+        return await asyncio.to_thread(
+            self.get_state, use_vision, as_bytes, scale
+        )
+
+    async def app_async(
+        self,
+        mode: Literal["launch", "resize", "move", "switch"] = "launch",
+        name: Optional[str] = None,
+        window_loc: Optional[Tuple[int, int]] = None,
+        window_size: Optional[Tuple[int, int]] = None,
+    ) -> str:
+        return await asyncio.to_thread(self.app, mode, name, window_loc, window_size)
+
+    async def click_async(
+        self,
+        loc: Tuple[int, int],
+        button: Literal["left", "right", "middle"] = "left",
+        clicks: int = 1,
+    ) -> None:
+        await asyncio.to_thread(self.click, loc, button, clicks)
+
+    async def type_async(
+        self,
+        loc: Tuple[int, int],
+        text: str,
+        caret_position: Literal["start", "idle", "end"] = "idle",
+        clear: bool = False,
+        press_enter: bool = False,
+    ) -> None:
+        await asyncio.to_thread(self.type, loc, text, caret_position, clear, press_enter)
+
+    async def scroll_async(
+        self,
+        loc: Optional[Tuple[int, int]],
+        scroll_type: Literal["horizontal", "vertical"],
+        direction: Literal["up", "down", "left", "right"],
+        wheel_times: int = 1,
+    ) -> Optional[str]:
+        return await asyncio.to_thread(self.scroll, loc, scroll_type, direction, wheel_times)
+
+    async def move_async(self, loc: Tuple[int, int]) -> None:
+        await asyncio.to_thread(self.move, loc)
+
+    async def drag_async(self, loc: Tuple[int, int]) -> None:
+        await asyncio.to_thread(self.drag, loc)
+
+    async def shortcut_async(self, shortcut: str) -> None:
+        await asyncio.to_thread(self.shortcut, shortcut)
+
+    async def wait_async(self, duration: int) -> None:
+        """Use asyncio.sleep instead of time.sleep to avoid blocking."""
+        await asyncio.sleep(duration)
+
+    async def scrape_async(self, url: str) -> str:
+        return await asyncio.to_thread(self.scrape, url)
+
+    async def notify_async(
+        self,
+        message: str,
+        title: str = "Notification",
+        subtitle: Optional[str] = None,
+        sound: Optional[str] = None,
+    ) -> str:
+        return await asyncio.to_thread(self.notify, message, title, subtitle, sound)
+
+    async def create_desktop_space_async(
+        self,
+        open_delay: float = 0.9,
+        close_after: bool = True,
+    ) -> str:
+        return await asyncio.to_thread(self.create_desktop_space, open_delay, close_after)

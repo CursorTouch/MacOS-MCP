@@ -183,6 +183,7 @@ from .core import (
     GetMacOSVersion,
     GetDefaultLanguage,
     ExecuteCommand,
+    AsyncExecuteCommand,
 )
 
 # Controls - Element wrappers
@@ -361,6 +362,7 @@ __all__ = [
     "GetMacOSVersion",
     "GetDefaultLanguage",
     "ExecuteCommand",
+    "AsyncExecuteCommand",
     # Controls
     "Control",
     "CreateControl",
