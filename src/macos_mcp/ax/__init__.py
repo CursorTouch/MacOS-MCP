@@ -90,6 +90,7 @@ from .core import (
     IsAccessibilityEnabledWithPrompt,
     # Attribute access
     GetAttribute,
+    HasAction,
     SetAttribute,
     IsAttributeSettable,
     GetAttributeNames,
@@ -279,6 +280,7 @@ __all__ = [
     "IsAccessibilityEnabled",
     "IsAccessibilityEnabledWithPrompt",
     "GetAttribute",
+    "HasAction",
     "SetAttribute",
     "IsAttributeSettable",
     "GetAttributeNames",

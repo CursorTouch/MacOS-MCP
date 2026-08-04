@@ -271,6 +271,24 @@ def IsAccessibilityEnabledWithPrompt() -> bool:
 # =============================================================================
 
 
+def HasAction(element: Any, action: str) -> bool:
+    """
+    Whether an element advertises a given action, e.g. AXPress.
+
+    Used as a last-resort interactivity signal for web-based UIs, where a
+    clickable control is often a plain AXGroup with no role or subrole to
+    identify it. Errors are treated as "no action" rather than raised: a dead
+    element mid-traversal should not abort a capture.
+    """
+    try:
+        err, actions = AXUIElementCopyActionNames(element, None)
+    except Exception:
+        return False
+    if err != 0 or not actions:
+        return False
+    return action in actions
+
+
 def GetAttribute(element: Any, attribute: str) -> Optional[Any]:
     """
     Get an attribute value from an AXUIElement.
