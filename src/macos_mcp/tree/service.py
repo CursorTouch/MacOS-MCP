@@ -628,6 +628,11 @@ class Tree:
             # 118 nodes to a 95-node capture -- mostly AXGroup and AXStaticText
             # containers, including icon-font glyphs as names.
             has_interactive_subrole = early["subrole"] in INTERACTIVE_SUBROLES
+            
+            has_list_title = role == "AXList" and bool(
+                ax.GetAttribute(element, ax.Attribute.Title)
+            )
+
 
             is_interactive = (
                 (has_roles and early["enabled"])
@@ -636,6 +641,7 @@ class Tree:
                 or bool(early["index"])
                 or has_title_ui_element
                 or has_interactive_subrole
+                or has_list_title
             ) and is_visible
 
 
@@ -740,6 +746,8 @@ class Tree:
                 elif role == "AXPopUpButton":
                     if title_ui_element_text:
                         metadata["title"] = title_ui_element_text
+                    if value := late["value"]:
+                        metadata["selected"] = value
 
                 elif role == "AXLink":
                     if url := late["url"]:
