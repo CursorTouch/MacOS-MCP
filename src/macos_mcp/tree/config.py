@@ -91,6 +91,11 @@ INTERACTIVE_ACTIONS = {
 # element was built, while the subrole describes what it is for.
 INTERACTIVE_SUBROLES = {
     "AXNotificationCenterBanner",
+    # A grouped/older notification -- e.g. several from the same app collapsed
+    # together -- is the same clickable thing under a second, undocumented
+    # subrole. Without it, only the single newest notification in a stack was
+    # captured and the rest were invisible despite being on screen.
+    "AXNotificationCenterBannerStack",
     "AXSearchField",
 }
 
