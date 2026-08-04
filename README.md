@@ -140,6 +140,83 @@ The `Snapshot` tool requires Screen Recording permissions to capture screenshots
 </details>
 
 <details>
+  <summary><strong>Claude Desktop (connecting to an HTTP server)</strong></summary>
+
+  Claude Desktop's `claude_desktop_config.json` only supports stdio-based server
+  entries. To connect to a running macOS-MCP HTTP server (e.g. one started with
+  `macos-mcp install --transport streamable-http`), use
+  [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) as a stdio-to-HTTP
+  bridge.
+
+  This is especially useful when running **multiple Claude Desktop instances**
+  (e.g. via [Parall](https://parall.app)) — a single persistent HTTP server
+  handles all of them, avoiding the overhead of spawning a separate `macos-mcp`
+  process per session.
+
+  **1. Start the HTTP server** (one-time setup):
+
+  ```shell
+  macos-mcp install --transport streamable-http --host 127.0.0.1 --port 8000
+  ```
+
+  **2. Configure Claude Desktop** to connect via `mcp-remote`:
+
+  ```json
+  {
+    "mcpServers": {
+      "macos-mcp": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "mcp-remote",
+          "http://127.0.0.1:8000/mcp",
+          "--transport",
+          "http-only"
+        ]
+      }
+    }
+  }
+  ```
+
+  **3. Restart Claude Desktop.**
+
+  If you have multiple Claude Desktop instances (e.g. Parall clones), add the
+  same `mcpServers` entry to each instance's `claude_desktop_config.json`. All
+  instances will share the single background server.
+
+  A migration script is included for bulk reconfiguration — see
+  [`scripts/stdio-to-http-reconfig.sh`](scripts/stdio-to-http-reconfig.sh).
+
+  **With authentication** (recommended when binding to `0.0.0.0`):
+
+  ```shell
+  # Start server with an auth key
+  macos-mcp install --transport streamable-http --host 0.0.0.0 --port 8000 \
+    --auth-key "your-secret-token"
+  ```
+
+  ```json
+  {
+    "mcpServers": {
+      "macos-mcp": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "mcp-remote",
+          "http://127.0.0.1:8000/mcp",
+          "--transport",
+          "http-only",
+          "--header",
+          "Authorization: Bearer your-secret-token"
+        ]
+      }
+    }
+  }
+  ```
+
+</details>
+
+<details>
   <summary><strong>Gemini CLI</strong></summary>
 
   1. Install Gemini CLI:
@@ -345,21 +422,28 @@ macos-mcp --transport streamable-http --host 0.0.0.0 \
   --oauth-client-secret my-secret
 ```
 
-**Claude Desktop config:**
+**Claude Desktop config** (via `mcp-remote` bridge — see [Integration Options](#integration-options)):
 ```json
 {
   "mcpServers": {
     "macos-mcp": {
-      "type": "http",
-      "url": "https://<host>:8000/mcp/",
-      "oauth": {
-        "clientId": "my-client",
-        "clientSecret": "my-secret"
-      }
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://<host>:8000/mcp",
+        "--transport",
+        "http-only"
+      ]
     }
   }
 }
 ```
+
+> **Note:** Claude Desktop's `claude_desktop_config.json` does not support
+> `"type": "http"` or `"url"` entries directly. Use `mcp-remote` as shown
+> above, or add the server via **Settings → Connectors → Add custom connector**
+> in the Claude Desktop UI.
 
 The OAuth server exposes:
 - `GET /.well-known/oauth-authorization-server` — server metadata (RFC 8414)
