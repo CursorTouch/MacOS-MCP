@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2FCursorTouch%2FMacOS-MCP.svg)](https://mcptoplist.com/server/glama%2FCursorTouch%2FMacOS-MCP)
+
 <!-- mcp-name: io.github.Jeomon/macos-mcp -->
 <div align="center">
   <h1>🍎 macOS-MCP</h1>
