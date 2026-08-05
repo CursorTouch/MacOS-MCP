@@ -186,14 +186,14 @@ mcp = FastMCP(name="macos-mcp", instructions=instructions, lifespan=lifespan)
         openWorldHint=False,
     ),
 )
-def app_tool(
+async def app_tool(
     mode: Literal["launch", "resize", "move", "switch"] = "launch",
     name: str | None = None,
     window_loc: list[int] | None = None,
     window_size: list[int] | None = None,
     ctx: Context = None,
 ):
-    return desktop.app(
+    return await desktop.app_async(
         mode,
         name,
         tuple(window_loc) if window_loc else None,
@@ -212,13 +212,13 @@ def app_tool(
         openWorldHint=True,
     ),
 )
-def shell_tool(
+async def shell_tool(
     command: str,
     mode: Literal["shell", "osascript"] = "shell",
     timeout: int = 10,
     ctx: Context = None,
 ) -> str:
-    response, status_code = desktop.execute_command(command, mode=mode, timeout=timeout)
+    response, status_code = await desktop.execute_command_async(command, mode=mode, timeout=timeout)
     mode_label = "AppleScript" if mode == "osascript" else "Shell"
     return f"{mode_label} Response: {response}\nStatus Code: {status_code}"
 
@@ -234,7 +234,7 @@ def shell_tool(
         openWorldHint=False,
     ),
 )
-def state_tool(use_vision: bool = False, ctx: Context = None):
+async def state_tool(use_vision: bool = False, ctx: Context = None):
     # Calculate scale factor to cap resolution at 1080p
     scale = 1.0
     if screen_size and screen_size.width > 0 and screen_size.height > 0:
@@ -250,7 +250,7 @@ def state_tool(use_vision: bool = False, ctx: Context = None):
         )
         scale = min(scale_width, scale_height)
 
-    desktop_state = desktop.get_state(use_vision=use_vision, as_bytes=True, scale=scale)
+    desktop_state = await desktop.get_state_async(use_vision=use_vision, as_bytes=True, scale=scale)
     interactive_elements = desktop_state.tree_state.interactive_elements_to_string()
     scrollable_elements = desktop_state.tree_state.scrollable_elements_to_string()
     windows = desktop_state.windows_to_string()
@@ -288,7 +288,7 @@ def state_tool(use_vision: bool = False, ctx: Context = None):
         openWorldHint=False,
     ),
 )
-def click_tool(
+async def click_tool(
     loc: list[int],
     button: Literal["left", "right", "middle"] = "left",
     clicks: int = 1,
@@ -297,7 +297,7 @@ def click_tool(
     if len(loc) != 2:
         raise ValueError("Location must be a list of exactly 2 integers [x, y]")
     x, y = loc[0], loc[1]
-    desktop.click(loc=(x, y), button=button, clicks=clicks)
+    await desktop.click_async(loc=(x, y), button=button, clicks=clicks)
     num_clicks = {0: "Hover", 1: "Single", 2: "Double"}
     return f"{num_clicks.get(clicks)} {button} clicked at ({x},{y})."
 
@@ -313,7 +313,7 @@ def click_tool(
         openWorldHint=False,
     ),
 )
-def type_tool(
+async def type_tool(
     loc: list[int],
     text: str,
     clear: bool = False,
@@ -324,7 +324,7 @@ def type_tool(
     if len(loc) != 2:
         raise ValueError("Location must be a list of exactly 2 integers [x, y]")
     x, y = loc[0], loc[1]
-    desktop.type(
+    await desktop.type_async(
         loc=(x, y),
         text=text,
         caret_position=caret_position,
@@ -345,7 +345,7 @@ def type_tool(
         openWorldHint=False,
     ),
 )
-def scroll_tool(
+async def scroll_tool(
     loc: list[int] = None,
     type: Literal["horizontal", "vertical"] = "vertical",
     direction: Literal["up", "down", "left", "right"] = "down",
@@ -354,7 +354,7 @@ def scroll_tool(
 ) -> str:
     if loc and len(loc) != 2:
         raise ValueError("Location must be a list of exactly 2 integers [x, y]")
-    response = desktop.scroll(tuple(loc) if loc else None, type, direction, wheel_times)
+    response = await desktop.scroll_async(tuple(loc) if loc else None, type, direction, wheel_times)
     if response:
         return response
     return f"Scrolled {type} {direction} by {wheel_times} wheel times" + (
@@ -373,15 +373,15 @@ def scroll_tool(
         openWorldHint=False,
     ),
 )
-def move_tool(loc: list[int], drag: bool = False, ctx: Context = None) -> str:
+async def move_tool(loc: list[int], drag: bool = False, ctx: Context = None) -> str:
     if len(loc) != 2:
         raise ValueError("loc must be a list of exactly 2 integers [x, y]")
     x, y = loc[0], loc[1]
     if drag:
-        desktop.drag((x, y))
+        await desktop.drag_async((x, y))
         return f"Dragged to ({x},{y})."
     else:
-        desktop.move((x, y))
+        await desktop.move_async((x, y))
         return f"Moved the mouse pointer to ({x},{y})."
 
 
@@ -396,8 +396,8 @@ def move_tool(loc: list[int], drag: bool = False, ctx: Context = None) -> str:
         openWorldHint=False,
     ),
 )
-def shortcut_tool(shortcut: str, ctx: Context = None):
-    desktop.shortcut(shortcut)
+async def shortcut_tool(shortcut: str, ctx: Context = None):
+    await desktop.shortcut_async(shortcut)
     return f"Pressed {shortcut}."
 
 
@@ -412,8 +412,8 @@ def shortcut_tool(shortcut: str, ctx: Context = None):
         openWorldHint=False,
     ),
 )
-def wait_tool(duration: int, ctx: Context = None) -> str:
-    desktop.wait(duration)
+async def wait_tool(duration: int, ctx: Context = None) -> str:
+    await desktop.wait_async(duration)
     return f"Waited for {duration} seconds."
 
 
@@ -431,9 +431,9 @@ _SCRAPE_MAX_CHARS = 20_000
         openWorldHint=True,
     ),
 )
-def scrape_tool(url: str, ctx: Context = None) -> str:
+async def scrape_tool(url: str, ctx: Context = None) -> str:
     validate_url(url)
-    content = desktop.scrape(url)
+    content = await desktop.scrape_async(url)
     if len(content) > _SCRAPE_MAX_CHARS:
         content = content[:_SCRAPE_MAX_CHARS] + f"\n\n...[truncated — {len(content) - _SCRAPE_MAX_CHARS} chars omitted. Scroll the page and scrape again to read more.]"
     return f"URL:{url}\nContent:\n{content}"
@@ -456,7 +456,7 @@ def scrape_tool(url: str, ctx: Context = None) -> str:
         openWorldHint=False,
     ),
 )
-def desktop_tool(
+async def desktop_tool(
     mode: Literal["create"] = "create",
     close_after: bool = True,
     open_delay: float = 0.9,
@@ -464,7 +464,7 @@ def desktop_tool(
 ) -> str:
     if mode != "create":
         return f"Unknown mode: {mode}. Supported modes: create."
-    return desktop.create_desktop_space(
+    return await desktop.create_desktop_space_async(
         open_delay=open_delay,
         close_after=close_after,
     )
@@ -481,7 +481,7 @@ def desktop_tool(
         openWorldHint=False,
     ),
 )
-def notification_tool(
+async def notification_tool(
     message: str,
     title: str = "Notification",
     subtitle: str | None = None,
@@ -503,7 +503,7 @@ def notification_tool(
     | None = None,
     ctx: Context = None,
 ) -> str:
-    return desktop.notify(message, title, subtitle, sound)
+    return await desktop.notify_async(message, title, subtitle, sound)
 
 
 def _param_explicit(ctx: click.Context, name: str) -> bool:

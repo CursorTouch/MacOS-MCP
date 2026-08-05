@@ -7,6 +7,7 @@ Equivalent to the Windows UIA core.py module, adapted for macOS.
 Uses native Quartz CGEvent APIs instead of pyautogui for input simulation.
 """
 
+import asyncio
 import time
 import subprocess
 import logging
@@ -2428,6 +2429,68 @@ def ExecuteCommand(
             stderr = err_f.read().decode("utf-8", "replace")
             output = stdout or stderr or ""
             return (output.strip(), proc.returncode)
+    except Exception as e:
+        return (str(e), -1)
+
+
+async def AsyncExecuteCommand(
+    command: str, mode: str = "shell", timeout: int = 10
+) -> Tuple[str, int]:
+    """
+    Async version of ExecuteCommand — runs the subprocess without blocking
+    the event loop.
+
+    Uses asyncio.create_subprocess_exec so that long-running commands
+    (or commands that hit the timeout) do not starve other clients sharing
+    the same HTTP server.
+
+    Args:
+        command: Command to execute.
+        mode: 'shell' for bash, 'osascript' for AppleScript.
+        timeout: Timeout in seconds.
+
+    Returns:
+        Tuple of (output, return_code).
+    """
+    import os
+    import signal
+
+    env = os.environ.copy()
+    argv = (
+        ["osascript", "-e", command]
+        if mode == "osascript"
+        else ["/bin/bash", "-c", command]
+    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            stdin=subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            start_new_session=True,
+        )
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            # Kill the entire process group, same as the sync version.
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except OSError:
+                proc.kill()
+            # Drain any remaining output after kill.
+            try:
+                await proc.wait()
+            except Exception:
+                pass
+            return (f"Command timed out after {timeout} seconds", -1)
+
+        stdout = stdout_bytes.decode("utf-8", "replace") if stdout_bytes else ""
+        stderr = stderr_bytes.decode("utf-8", "replace") if stderr_bytes else ""
+        output = stdout or stderr or ""
+        return (output.strip(), proc.returncode)
     except Exception as e:
         return (str(e), -1)
 
