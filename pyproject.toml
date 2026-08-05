@@ -42,6 +42,7 @@ dev = [
     "pytest>=7.4.0",
     "pytest-mock>=3.11.0",
     "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.23.0",
 ]
 
 [project.urls]
@@ -68,6 +69,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --strict-markers"
+asyncio_mode = "auto"
 markers = [
     "unit: unit tests",
     "integration: integration tests",

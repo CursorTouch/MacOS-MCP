@@ -1,7 +1,10 @@
 """Tests for desktop/service.py module."""
 
+import asyncio
+import time
+
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import AsyncMock, Mock, MagicMock, patch, call
 from macos_mcp.desktop.service import Desktop
 from macos_mcp.desktop.views import Window, Status, DesktopState, Size
 from macos_mcp.tree.views import BoundingBox, TreeState, Center
@@ -403,3 +406,167 @@ class TestDesktopScrape:
         desktop = Desktop()
         result = desktop.scrape("https://example.com")
         assert "timeout" in result.lower()
+
+
+@pytest.mark.unit
+class TestDesktopAsyncAPI:
+    """Tests for the async_* mirror of the sync Desktop API.
+
+    Every async_* method must accept the same arguments and produce the same
+    result as its sync counterpart, without blocking the event loop.
+    """
+
+    async def test_async_app_launch(self, mocker):
+        """async_app delegates to the sync app implementation."""
+        mock_launch = mocker.patch(
+            "macos_mcp.desktop.service.ax.LaunchApplication", return_value=True
+        )
+        desktop = Desktop()
+        result = await desktop.async_app(mode="launch", name="Safari")
+        assert "Launched Safari" in result
+        mock_launch.assert_called_once_with("Safari")
+
+    async def test_async_app_unknown_mode(self):
+        """Error strings are surfaced unchanged through the async wrapper."""
+        desktop = Desktop()
+        result = await desktop.async_app(mode="unknown_mode")
+        assert "Unknown mode" in result
+
+    async def test_async_click(self, mocker):
+        """async_click forwards button and click count."""
+        mock_click = mocker.patch("macos_mcp.desktop.service.ax.Click")
+        desktop = Desktop()
+        await desktop.async_click((100, 200), button="left", clicks=1)
+        mock_click.assert_called_once_with(100, 200)
+
+    async def test_async_move(self, mocker):
+        mock_move = mocker.patch("macos_mcp.desktop.service.ax.MoveTo")
+        desktop = Desktop()
+        await desktop.async_move((300, 400))
+        mock_move.assert_called_once_with(300, 400)
+
+    async def test_async_drag(self, mocker):
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.GetCursorPos", return_value=(100, 200)
+        )
+        mock_drag = mocker.patch("macos_mcp.desktop.service.ax.DragTo")
+        desktop = Desktop()
+        await desktop.async_drag((300, 400))
+        mock_drag.assert_called_once_with(100, 200, 300, 400)
+
+    async def test_async_shortcut(self, mocker):
+        mock_hotkey = mocker.patch("macos_mcp.desktop.service.ax.HotKey")
+        desktop = Desktop()
+        await desktop.async_shortcut("command+shift+s")
+        mock_hotkey.assert_called_once_with("command", "shift", "s")
+
+    async def test_async_type(self, mocker):
+        mocker.patch("macos_mcp.desktop.service.ax.MoveTo")
+        mocker.patch("macos_mcp.desktop.service.ax.Click")
+        mock_type = mocker.patch("macos_mcp.desktop.service.ax.TypeText")
+        mocker.patch("macos_mcp.desktop.service.time.sleep")
+        desktop = Desktop()
+        await desktop.async_type((100, 200), "Hello World")
+        mock_type.assert_called_once_with("Hello World")
+
+    async def test_async_scroll(self, mocker):
+        mocker.patch("macos_mcp.desktop.service.ax.MoveTo")
+        mock_wheel = mocker.patch("macos_mcp.desktop.service.ax.WheelDown")
+        mocker.patch("macos_mcp.desktop.service.time.sleep")
+        desktop = Desktop()
+        result = await desktop.async_scroll((100, 200), "vertical", "down", wheel_times=2)
+        assert result is None
+        assert mock_wheel.call_count == 2
+
+    async def test_async_scroll_wrong_direction(self, mocker):
+        """Validation messages are returned, not raised, through the wrapper."""
+        desktop = Desktop()
+        result = await desktop.async_scroll((100, 200), "vertical", "left")
+        assert "Use direction 'up' or 'down'" in result
+
+    async def test_async_wait_uses_asyncio_sleep(self, mocker):
+        """async_wait must not block the loop with time.sleep."""
+        mock_time_sleep = mocker.patch("macos_mcp.desktop.service.time.sleep")
+        mock_async_sleep = mocker.patch(
+            "macos_mcp.desktop.service.asyncio.sleep", new_callable=AsyncMock
+        )
+        desktop = Desktop()
+        await desktop.async_wait(5)
+        mock_async_sleep.assert_awaited_once_with(5)
+        mock_time_sleep.assert_not_called()
+
+    async def test_async_execute_command_uses_async_subprocess(self, mocker):
+        """async_execute_command must use the native asyncio subprocess path."""
+        mock_sync_exec = mocker.patch("macos_mcp.desktop.service.ax.ExecuteCommand")
+        mock_async_exec = mocker.patch(
+            "macos_mcp.desktop.service.ax.AsyncExecuteCommand",
+            new_callable=AsyncMock,
+            return_value=("output", 0),
+        )
+        desktop = Desktop()
+        result = await desktop.async_execute_command("ls -la", mode="shell")
+        assert result == ("output", 0)
+        mock_async_exec.assert_awaited_once_with("ls -la", mode="shell", timeout=10)
+        mock_sync_exec.assert_not_called()
+
+    async def test_async_notify(self, mocker):
+        mocker.patch("subprocess.run", return_value=MagicMock(returncode=0))
+        desktop = Desktop()
+        result = await desktop.async_notify("Test Message", title="Test Title")
+        assert "Notification sent" in result
+
+    async def test_async_scrape(self, mocker):
+        mock_response = MagicMock()
+        mock_response.text = "<html>Test content</html>"
+        mocker.patch(
+            "macos_mcp.desktop.service.requests.get", return_value=mock_response
+        )
+        desktop = Desktop()
+        result = await desktop.async_scrape("https://example.com")
+        assert "Test content" in result
+
+    async def test_async_create_desktop_space(self, mocker):
+        mock_create = mocker.patch(
+            "macos_mcp.desktop.service.ax.CreateDesktopSpace",
+            return_value=(True, "Created new desktop space."),
+        )
+        desktop = Desktop()
+        result = await desktop.async_create_desktop_space(
+            open_delay=0.5, close_after=True
+        )
+        assert result == "Created new desktop space."
+        mock_create.assert_called_once_with(open_delay=0.5, close_after=True)
+
+    async def test_async_get_state(self, mocker):
+        """async_get_state returns the same DesktopState the sync method builds."""
+        desktop = Desktop()
+        sentinel = object()
+        mock_get_state = mocker.patch.object(
+            Desktop, "get_state", return_value=sentinel
+        )
+        result = await desktop.async_get_state(use_vision=False, scale=1.0)
+        assert result is sentinel
+        mock_get_state.assert_called_once_with(False, False, 1.0)
+
+    async def test_async_methods_do_not_block_the_event_loop(self, mocker):
+        """A slow sync call must leave the loop free to run other tasks.
+
+        The ticker finishes after ~0.05s and the click after ~0.2s, so the
+        ticker can only complete first if the click ran off the event loop.
+        """
+        order = []
+
+        def slow_click(x, y):
+            time.sleep(0.2)
+            order.append("click")
+
+        mocker.patch("macos_mcp.desktop.service.ax.Click", side_effect=slow_click)
+        desktop = Desktop()
+
+        async def ticker():
+            for _ in range(5):
+                await asyncio.sleep(0.01)
+            order.append("ticker")
+
+        await asyncio.gather(desktop.async_click((1, 2)), ticker())
+        assert order == ["ticker", "click"], "event loop was blocked during async_click"

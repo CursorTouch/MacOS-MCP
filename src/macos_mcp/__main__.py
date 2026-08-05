@@ -193,7 +193,7 @@ async def app_tool(
     window_size: list[int] | None = None,
     ctx: Context = None,
 ):
-    return await desktop.app_async(
+    return await desktop.async_app(
         mode,
         name,
         tuple(window_loc) if window_loc else None,
@@ -218,7 +218,7 @@ async def shell_tool(
     timeout: int = 10,
     ctx: Context = None,
 ) -> str:
-    response, status_code = await desktop.execute_command_async(command, mode=mode, timeout=timeout)
+    response, status_code = await desktop.async_execute_command(command, mode=mode, timeout=timeout)
     mode_label = "AppleScript" if mode == "osascript" else "Shell"
     return f"{mode_label} Response: {response}\nStatus Code: {status_code}"
 
@@ -250,7 +250,7 @@ async def state_tool(use_vision: bool = False, ctx: Context = None):
         )
         scale = min(scale_width, scale_height)
 
-    desktop_state = await desktop.get_state_async(use_vision=use_vision, as_bytes=True, scale=scale)
+    desktop_state = await desktop.async_get_state(use_vision=use_vision, as_bytes=True, scale=scale)
     interactive_elements = desktop_state.tree_state.interactive_elements_to_string()
     scrollable_elements = desktop_state.tree_state.scrollable_elements_to_string()
     windows = desktop_state.windows_to_string()
@@ -297,7 +297,7 @@ async def click_tool(
     if len(loc) != 2:
         raise ValueError("Location must be a list of exactly 2 integers [x, y]")
     x, y = loc[0], loc[1]
-    await desktop.click_async(loc=(x, y), button=button, clicks=clicks)
+    await desktop.async_click(loc=(x, y), button=button, clicks=clicks)
     num_clicks = {0: "Hover", 1: "Single", 2: "Double"}
     return f"{num_clicks.get(clicks)} {button} clicked at ({x},{y})."
 
@@ -324,7 +324,7 @@ async def type_tool(
     if len(loc) != 2:
         raise ValueError("Location must be a list of exactly 2 integers [x, y]")
     x, y = loc[0], loc[1]
-    await desktop.type_async(
+    await desktop.async_type(
         loc=(x, y),
         text=text,
         caret_position=caret_position,
@@ -354,7 +354,7 @@ async def scroll_tool(
 ) -> str:
     if loc and len(loc) != 2:
         raise ValueError("Location must be a list of exactly 2 integers [x, y]")
-    response = await desktop.scroll_async(tuple(loc) if loc else None, type, direction, wheel_times)
+    response = await desktop.async_scroll(tuple(loc) if loc else None, type, direction, wheel_times)
     if response:
         return response
     return f"Scrolled {type} {direction} by {wheel_times} wheel times" + (
@@ -378,10 +378,10 @@ async def move_tool(loc: list[int], drag: bool = False, ctx: Context = None) -> 
         raise ValueError("loc must be a list of exactly 2 integers [x, y]")
     x, y = loc[0], loc[1]
     if drag:
-        await desktop.drag_async((x, y))
+        await desktop.async_drag((x, y))
         return f"Dragged to ({x},{y})."
     else:
-        await desktop.move_async((x, y))
+        await desktop.async_move((x, y))
         return f"Moved the mouse pointer to ({x},{y})."
 
 
@@ -397,7 +397,7 @@ async def move_tool(loc: list[int], drag: bool = False, ctx: Context = None) -> 
     ),
 )
 async def shortcut_tool(shortcut: str, ctx: Context = None):
-    await desktop.shortcut_async(shortcut)
+    await desktop.async_shortcut(shortcut)
     return f"Pressed {shortcut}."
 
 
@@ -413,7 +413,7 @@ async def shortcut_tool(shortcut: str, ctx: Context = None):
     ),
 )
 async def wait_tool(duration: int, ctx: Context = None) -> str:
-    await desktop.wait_async(duration)
+    await desktop.async_wait(duration)
     return f"Waited for {duration} seconds."
 
 
@@ -433,7 +433,7 @@ _SCRAPE_MAX_CHARS = 20_000
 )
 async def scrape_tool(url: str, ctx: Context = None) -> str:
     validate_url(url)
-    content = await desktop.scrape_async(url)
+    content = await desktop.async_scrape(url)
     if len(content) > _SCRAPE_MAX_CHARS:
         content = content[:_SCRAPE_MAX_CHARS] + f"\n\n...[truncated — {len(content) - _SCRAPE_MAX_CHARS} chars omitted. Scroll the page and scrape again to read more.]"
     return f"URL:{url}\nContent:\n{content}"
@@ -464,7 +464,7 @@ async def desktop_tool(
 ) -> str:
     if mode != "create":
         return f"Unknown mode: {mode}. Supported modes: create."
-    return await desktop.create_desktop_space_async(
+    return await desktop.async_create_desktop_space(
         open_delay=open_delay,
         close_after=close_after,
     )
@@ -503,7 +503,7 @@ async def notification_tool(
     | None = None,
     ctx: Context = None,
 ) -> str:
-    return await desktop.notify_async(message, title, subtitle, sound)
+    return await desktop.async_notify(message, title, subtitle, sound)
 
 
 def _param_explicit(ctx: click.Context, name: str) -> bool:

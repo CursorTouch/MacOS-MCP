@@ -587,16 +587,20 @@ class Desktop:
         return padded
 
     # =========================================================================
-    # Async wrappers
+    # Async API
     #
-    # Every method below offloads its work so that the uvicorn event loop is
-    # never blocked.  execute_command_async uses the native asyncio subprocess
-    # API; the rest delegate to asyncio.to_thread so that pyobjc / Quartz /
-    # Pillow calls (which hold the GIL or do blocking I/O) run in a thread-pool
-    # worker.
+    # Every async_* method mirrors the sync method of the same name and offloads
+    # its work so that the uvicorn event loop is never blocked.  The sync
+    # methods above hold the actual implementation and remain the single source
+    # of truth.
+    #
+    # async_execute_command uses the native asyncio subprocess API and
+    # async_wait uses asyncio.sleep; the rest delegate to asyncio.to_thread so
+    # that pyobjc / Quartz / Pillow calls (which hold the GIL or do blocking
+    # I/O) run in a thread-pool worker.
     # =========================================================================
 
-    async def execute_command_async(
+    async def async_execute_command(
         self,
         command: str,
         mode: Literal["shell", "osascript"] = "shell",
@@ -605,7 +609,7 @@ class Desktop:
         """Async version — uses asyncio subprocess, never blocks the loop."""
         return await ax.AsyncExecuteCommand(command, mode=mode, timeout=timeout)
 
-    async def get_state_async(
+    async def async_get_state(
         self,
         use_vision: bool = False,
         as_bytes: bool = False,
@@ -615,7 +619,7 @@ class Desktop:
             self.get_state, use_vision, as_bytes, scale
         )
 
-    async def app_async(
+    async def async_app(
         self,
         mode: Literal["launch", "resize", "move", "switch"] = "launch",
         name: Optional[str] = None,
@@ -624,7 +628,7 @@ class Desktop:
     ) -> str:
         return await asyncio.to_thread(self.app, mode, name, window_loc, window_size)
 
-    async def click_async(
+    async def async_click(
         self,
         loc: Tuple[int, int],
         button: Literal["left", "right", "middle"] = "left",
@@ -632,7 +636,7 @@ class Desktop:
     ) -> None:
         await asyncio.to_thread(self.click, loc, button, clicks)
 
-    async def type_async(
+    async def async_type(
         self,
         loc: Tuple[int, int],
         text: str,
@@ -642,7 +646,7 @@ class Desktop:
     ) -> None:
         await asyncio.to_thread(self.type, loc, text, caret_position, clear, press_enter)
 
-    async def scroll_async(
+    async def async_scroll(
         self,
         loc: Optional[Tuple[int, int]],
         scroll_type: Literal["horizontal", "vertical"],
@@ -651,23 +655,23 @@ class Desktop:
     ) -> Optional[str]:
         return await asyncio.to_thread(self.scroll, loc, scroll_type, direction, wheel_times)
 
-    async def move_async(self, loc: Tuple[int, int]) -> None:
+    async def async_move(self, loc: Tuple[int, int]) -> None:
         await asyncio.to_thread(self.move, loc)
 
-    async def drag_async(self, loc: Tuple[int, int]) -> None:
+    async def async_drag(self, loc: Tuple[int, int]) -> None:
         await asyncio.to_thread(self.drag, loc)
 
-    async def shortcut_async(self, shortcut: str) -> None:
+    async def async_shortcut(self, shortcut: str) -> None:
         await asyncio.to_thread(self.shortcut, shortcut)
 
-    async def wait_async(self, duration: int) -> None:
+    async def async_wait(self, duration: int) -> None:
         """Use asyncio.sleep instead of time.sleep to avoid blocking."""
         await asyncio.sleep(duration)
 
-    async def scrape_async(self, url: str) -> str:
+    async def async_scrape(self, url: str) -> str:
         return await asyncio.to_thread(self.scrape, url)
 
-    async def notify_async(
+    async def async_notify(
         self,
         message: str,
         title: str = "Notification",
@@ -676,7 +680,7 @@ class Desktop:
     ) -> str:
         return await asyncio.to_thread(self.notify, message, title, subtitle, sound)
 
-    async def create_desktop_space_async(
+    async def async_create_desktop_space(
         self,
         open_delay: float = 0.9,
         close_after: bool = True,
