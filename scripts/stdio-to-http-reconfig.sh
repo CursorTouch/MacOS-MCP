@@ -9,7 +9,9 @@
 # ─────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-DEFAULT_URL="http://127.0.0.1:8000/mcp"
+DEFAULT_PORT="8000"
+DEFAULT_HOST="127.0.0.1"
+DEFAULT_URL="http://${DEFAULT_HOST}:${DEFAULT_PORT}/mcp"
 MCP_NAME="macos-mcp"
 
 usage() {
@@ -51,18 +53,20 @@ EOF
 }
 
 # ── Parse arguments ───────────────────────────────────────────────
-URL="$DEFAULT_URL"
+URL=""
 AUTH_KEY=""
 DRY_RUN=false
 INSTALL_SERVER=false
 TRANSPORT="streamable-http"
-HOST="127.0.0.1"
-PORT="8000"
+HOST="$DEFAULT_HOST"
+PORT="$DEFAULT_PORT"
+PORT_EXPLICIT=false
+URL_EXPLICIT=false
 SINGLE_CONFIG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --url)         URL="$2"; shift 2 ;;
+    --url)         URL="$2"; URL_EXPLICIT=true; shift 2 ;;
     --auth-key)    AUTH_KEY="$2"; shift 2 ;;
     --name)        MCP_NAME="$2"; shift 2 ;;
     --config)      SINGLE_CONFIG="$2"; shift 2 ;;
@@ -70,11 +74,29 @@ while [[ $# -gt 0 ]]; do
     --install-server) INSTALL_SERVER=true; shift ;;
     --transport)   TRANSPORT="$2"; shift 2 ;;
     --host)        HOST="$2"; shift 2 ;;
-    --port)        PORT="$2"; shift 2 ;;
+    --port)        PORT="$2"; PORT_EXPLICIT=true; shift 2 ;;
     -h|--help)     usage ;;
     *)             echo "Unknown option: $1"; usage ;;
   esac
 done
+
+# ── Port probing ─────────────────────────────────────────────────
+# Return the first free TCP port at or above $1 on host $2 (default 127.0.0.1).
+find_free_port() {
+  local start="${1:-8000}"
+  local host="${2:-127.0.0.1}"
+  local port="$start"
+  local limit=$(( start + 100 ))
+  while [ "$port" -lt "$limit" ]; do
+    if ! lsof -i TCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "$port"
+      return 0
+    fi
+    port=$(( port + 1 ))
+  done
+  echo "ERROR: No free port found in range $start–$(( limit - 1 )) on $host" >&2
+  return 1
+}
 
 # ── Discover config files ────────────────────────────────────────
 discover_configs() {
@@ -180,6 +202,13 @@ echo ""
 # Optionally install the server first
 if [ "$INSTALL_SERVER" = true ]; then
   echo "=== Installing HTTP server ==="
+
+  # Auto-select a free port unless the user pinned one with --port
+  if [ "$PORT_EXPLICIT" = false ]; then
+    PORT=$(find_free_port "$PORT" "$HOST")
+    echo "  Selected port: $PORT"
+  fi
+
   if command -v macos-mcp &>/dev/null; then
     macos-mcp install --transport "$TRANSPORT" --host "$HOST" --port "$PORT" --force
   elif command -v uvx &>/dev/null; then
@@ -191,6 +220,11 @@ if [ "$INSTALL_SERVER" = true ]; then
   fi
   echo ""
   sleep 2
+fi
+
+# Derive URL from host/port if --url was not given explicitly
+if [ "$URL_EXPLICIT" = false ]; then
+  URL="http://${HOST}:${PORT}/mcp"
 fi
 
 # Build the entry JSON

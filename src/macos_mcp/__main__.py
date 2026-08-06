@@ -41,6 +41,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import socket
 import signal
 import subprocess
 import sys
@@ -899,6 +900,20 @@ _LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 _PLIST_PATH = _LAUNCH_AGENTS_DIR / f"{_AGENT_LABEL}.plist"
 
 
+def _find_free_port(host: str, preferred: int, max_tries: int = 100) -> int:
+    """Return the first free TCP port at or above preferred on host."""
+    for port in range(preferred, preferred + max_tries):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((host, port))
+                return port
+        except OSError:
+            continue
+    raise click.ClickException(
+        f"No free port found in range {preferred}–{preferred + max_tries - 1} on {host}."
+    )
+
+
 def _resolve_program() -> list[str]:
     """Return the argv prefix to invoke `macos-mcp serve` from launchd."""
     macos_mcp = shutil.which("macos-mcp")
@@ -963,6 +978,14 @@ def install(transport: str, host: str, port: int, force: bool) -> None:
         click.echo(f"Launch agent already installed at {_PLIST_PATH}.")
         click.echo("Use --force to reinstall.")
         return
+
+    # Auto-select a free port when the user didn't explicitly pass --port.
+    ctx = click.get_current_context()
+    if ctx.get_parameter_source("port") == click.core.ParameterSource.DEFAULT:
+        selected = _find_free_port(host, port)
+        if selected != port:
+            click.echo(f"Port {port} is in use — using {selected} instead.")
+        port = selected
 
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     _LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
