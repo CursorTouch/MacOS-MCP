@@ -1,14 +1,7 @@
 //
 // MCPStdioBridge.swift — zero-dependency stdio-to-HTTP bridge for MCP servers.
 //
-// Replaces npx mcp-remote for local HTTP MCP servers. No Node.js required.
-// Single-file, compiles with `swiftc -O` to a native arm64 binary.
-//
-// Handles MCP Streamable HTTP session management (MCP-Session-Id header)
-// and SSE response parsing (text/event-stream with data: lines).
-//
 // Build:   swiftc -O -o mcp-stdio-bridge MCPStdioBridge.swift
-// Size:    ~90KB compiled vs ~100MB per mcp-remote Node process
 //
 // Design baseline: mootx01-ce apps/mootx01/rust/src/commands/proxy.rs
 
@@ -28,11 +21,12 @@ struct Config {
     var url: String
     var timeout: TimeInterval
     var maxConcurrent: Int
+    var logFile: String?
 }
 
 func parseArgs() -> Config {
     var config = Config(url: defaultURL, timeout: defaultTimeout,
-                        maxConcurrent: defaultMaxConcurrent)
+                        maxConcurrent: defaultMaxConcurrent, logFile: nil)
     let args = Array(CommandLine.arguments.dropFirst())
     var i = 0
     while i < args.count {
@@ -43,8 +37,10 @@ func parseArgs() -> Config {
             config.timeout = TimeInterval(args[i + 1]) ?? defaultTimeout; i += 2
         case "--max-concurrent" where i + 1 < args.count:
             config.maxConcurrent = Int(args[i + 1]) ?? defaultMaxConcurrent; i += 2
+        case "--log-file" where i + 1 < args.count:
+            config.logFile = args[i + 1]; i += 2
         case "-h", "--help":
-            log("Usage: mcp-stdio-bridge [--url URL] [--timeout SECS] [--max-concurrent N]")
+            log("Usage: mcp-stdio-bridge [--url URL] [--timeout SECS] [--max-concurrent N] [--log-file PATH]")
             exit(0)
         default:
             log("unknown option: \(args[i])"); exit(1)
@@ -53,10 +49,25 @@ func parseArgs() -> Config {
     return config
 }
 
-// MARK: - Logging (stderr only)
+// MARK: - Logging (stderr + optional file, never stdout)
+
+var logFileHandle: FileHandle?
+let logLock = NSLock()
+
+func setupLogFile(_ path: String) {
+    FileManager.default.createFile(atPath: path, contents: nil)
+    logFileHandle = FileHandle(forWritingAtPath: path)
+    logFileHandle?.seekToEndOfFile()
+}
 
 func log(_ msg: String) {
-    FileHandle.standardError.write(Data("mcp-stdio-bridge: \(msg)\n".utf8))
+    let ts = ISO8601DateFormatter().string(from: Date())
+    let line = "[\(ts)] mcp-stdio-bridge[\(ProcessInfo.processInfo.processIdentifier)]: \(msg)\n"
+    let data = Data(line.utf8)
+    FileHandle.standardError.write(data)
+    logLock.lock()
+    logFileHandle?.write(data)
+    logLock.unlock()
 }
 
 // MARK: - Session state (thread-safe)
@@ -71,7 +82,11 @@ func getSessionID() -> String? {
 
 func setSessionID(_ sid: String) {
     sessionLock.lock(); defer { sessionLock.unlock() }
+    let old = sessionID
     sessionID = sid
+    if old != sid {
+        log("session: \(old ?? "nil") -> \(sid)")
+    }
 }
 
 // MARK: - Stdout serialization
@@ -87,8 +102,6 @@ func writeFrame(_ data: Data) {
 
 // MARK: - SSE parsing
 
-/// Extract JSON-RPC frames from a text/event-stream response.
-/// Each "data: {...}" line is a frame.
 func extractSSEData(_ body: Data) -> [Data] {
     guard let text = String(data: body, encoding: .utf8) else { return [body] }
     var frames: [Data] = []
@@ -104,7 +117,7 @@ func extractSSEData(_ body: Data) -> [Data] {
     return frames.isEmpty ? [body] : frames
 }
 
-// MARK: - JSON-RPC id extraction
+// MARK: - JSON-RPC id and method extraction
 
 func requestID(_ line: String) -> String? {
     guard let data = line.data(using: .utf8),
@@ -121,11 +134,22 @@ func requestID(_ line: String) -> String? {
     return nil
 }
 
+func requestMethod(_ line: String) -> String? {
+    guard let data = line.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let method = obj["method"] as? String else { return nil }
+    return method
+}
+
 // MARK: - Frame forwarding
 
 func forwardFrame(url: URL, timeout: TimeInterval, line: String,
                   session: URLSession) {
     guard let body = line.data(using: .utf8) else { return }
+
+    let method = requestMethod(line) ?? "unknown"
+    let rid = requestID(line) ?? "notification"
+    log("-> \(method) id=\(rid)")
 
     var req = URLRequest(url: url)
     req.httpMethod = "POST"
@@ -139,12 +163,14 @@ func forwardFrame(url: URL, timeout: TimeInterval, line: String,
     }
 
     let sem = DispatchSemaphore(value: 0)
+    let start = Date()
 
     let task = session.dataTask(with: req) { data, response, error in
         defer { sem.signal() }
+        let elapsed = Date().timeIntervalSince(start)
 
         if let error = error {
-            log("request failed: \(error.localizedDescription)")
+            log("<- \(method) id=\(rid) ERROR [\(String(format: "%.3f", elapsed))s]: \(error.localizedDescription)")
             if let rid = requestID(line) {
                 let msg = error.localizedDescription
                     .replacingOccurrences(of: "\\", with: "\\\\")
@@ -160,14 +186,18 @@ func forwardFrame(url: URL, timeout: TimeInterval, line: String,
         let httpResp = response as? HTTPURLResponse
         let status = httpResp?.statusCode ?? 0
 
-        // Capture session id
         if let newSID = httpResp?.value(forHTTPHeaderField: "Mcp-Session-Id") {
             setSessionID(newSID)
         }
 
-        guard let data = data, !data.isEmpty, status != 202 else { return }
+        guard let data = data, !data.isEmpty, status != 202 else {
+            log("<- \(method) id=\(rid) \(status) empty [\(String(format: "%.3f", elapsed))s]")
+            return
+        }
 
         let contentType = httpResp?.value(forHTTPHeaderField: "Content-Type") ?? ""
+        log("<- \(method) id=\(rid) \(status) \(data.count)B \(contentType.prefix(30)) [\(String(format: "%.3f", elapsed))s]")
+
         if contentType.contains("text/event-stream") {
             for frame in extractSSEData(data) {
                 if !frame.isEmpty { writeFrame(frame) }
@@ -183,7 +213,6 @@ func forwardFrame(url: URL, timeout: TimeInterval, line: String,
 // MARK: - Startup health check
 
 func waitForServer(url: URL, maxWait: TimeInterval = 30) -> Bool {
-    // POST a minimal initialize as the health check; HEAD/GET hang on SSE endpoints.
     let ping = Data(#"{"jsonrpc":"2.0","id":"ping","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"healthcheck","version":"1"}}}"#.utf8)
     let deadline = Date().addingTimeInterval(maxWait)
     var attempt = 0
@@ -218,6 +247,13 @@ func waitForServer(url: URL, maxWait: TimeInterval = 30) -> Bool {
 // MARK: - Main
 
 let config = parseArgs()
+
+if let logPath = config.logFile {
+    setupLogFile(logPath)
+}
+
+log("starting pid=\(ProcessInfo.processInfo.processIdentifier)")
+
 guard let endpointURL = URL(string: config.url) else {
     log("invalid URL: \(config.url)"); exit(1)
 }
@@ -234,11 +270,15 @@ let urlSession = URLSession(configuration: sessionConfig)
 
 let workerQueue = DispatchQueue(label: "bridge.workers", attributes: .concurrent)
 let concurrencyCap = DispatchSemaphore(value: config.maxConcurrent)
+let inflightGroup = DispatchGroup()
 
 var buffer = Data()
 while true {
     let chunk = FileHandle.standardInput.availableData
-    if chunk.isEmpty { break }
+    if chunk.isEmpty {
+        log("stdin EOF")
+        break
+    }
     buffer.append(chunk)
 
     while let nlIndex = buffer.firstIndex(of: 0x0A) {
@@ -251,10 +291,12 @@ while true {
         guard let line = String(data: lineData, encoding: .utf8) else { continue }
 
         concurrencyCap.wait()
+        inflightGroup.enter()
         workerQueue.async {
             forwardFrame(url: endpointURL, timeout: config.timeout,
                          line: line, session: urlSession)
             concurrencyCap.signal()
+            inflightGroup.leave()
         }
     }
 }
@@ -265,4 +307,5 @@ if !buffer.isEmpty, buffer.count <= maxLineBytes,
                  line: line, session: urlSession)
 }
 
-log("stdin closed, exiting")
+inflightGroup.wait()
+log("exiting")

@@ -35,7 +35,10 @@ Both bridges implement the same design (baseline: mootx01-ce proxy.rs):
 
 ```bash
 swiftc -O -o mcp-stdio-bridge MCPStdioBridge.swift
+codesign -s - mcp-stdio-bridge
 ```
+
+The ad-hoc codesign is required. macOS will SIGKILL unsigned binaries on launch.
 
 ## Claude Desktop config
 
@@ -72,4 +75,5 @@ swiftc -O -o mcp-stdio-bridge MCPStdioBridge.swift
 --url URL              MCP endpoint (default: http://127.0.0.1:8765/mcp)
 --timeout SECONDS      Per-request timeout (default: 3600)
 --max-concurrent N     Max in-flight frames (default: 16)
+--log-file PATH        Write timestamped logs to file (debug)
 ```

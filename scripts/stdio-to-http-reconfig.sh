@@ -90,7 +90,8 @@ if [ "$BUILD" = true ]; then
     exit 1
   fi
   swiftc -O -o "$BRIDGE_BIN" "$BRIDGE_DIR/MCPStdioBridge.swift"
-  echo "  Built: $BRIDGE_BIN ($(wc -c < "$BRIDGE_BIN" | tr -d ' ') bytes)"
+  codesign -s - "$BRIDGE_BIN"
+  echo "  Built: $BRIDGE_BIN ($(wc -c < "$BRIDGE_BIN" | tr -d ' ') bytes, ad-hoc signed)"
   echo ""
 fi
 
