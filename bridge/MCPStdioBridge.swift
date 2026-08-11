@@ -13,7 +13,9 @@ import FoundationNetworking
 // MARK: - Configuration
 
 let defaultURL = "http://127.0.0.1:8765/mcp"
-let defaultTimeout: TimeInterval = 3600
+// Below the MCP host's own wall-clock ceiling (~4 min). At 3600 the host
+// gave up first, leaving the request unanswered and the worker slot held.
+let defaultTimeout: TimeInterval = 300
 let defaultMaxConcurrent = 16
 let maxLineBytes = 4 * 1024 * 1024
 
@@ -55,7 +57,11 @@ var logFileHandle: FileHandle?
 let logLock = NSLock()
 
 func setupLogFile(_ path: String) {
-    FileManager.default.createFile(atPath: path, contents: nil)
+    // Append. Creating unconditionally truncated the log on every respawn,
+    // destroying the record of whatever failure caused the respawn.
+    if !FileManager.default.fileExists(atPath: path) {
+        FileManager.default.createFile(atPath: path, contents: nil)
+    }
     logFileHandle = FileHandle(forWritingAtPath: path)
     logFileHandle?.seekToEndOfFile()
 }
@@ -78,6 +84,22 @@ var sessionID: String?
 func getSessionID() -> String? {
     sessionLock.lock(); defer { sessionLock.unlock() }
     return sessionID
+}
+
+func clearSessionID() {
+    sessionLock.lock(); defer { sessionLock.unlock() }
+    if sessionID != nil { log("session: cleared") }
+    sessionID = nil
+}
+
+/// Never leave a request unanswered. A JSON-RPC request with no reply hangs
+/// the client forever; an error frame at least unblocks it.
+func respondError(_ line: String, _ message: String) {
+    guard let rid = requestID(line) else { return }
+    let msg = message
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "'")
+    writeFrame(Data("{\"jsonrpc\":\"2.0\",\"id\":\(rid),\"error\":{\"code\":-32603,\"message\":\"\(msg)\"}}".utf8))
 }
 
 func setSessionID(_ sid: String) {
@@ -144,7 +166,7 @@ func requestMethod(_ line: String) -> String? {
 // MARK: - Frame forwarding
 
 func forwardFrame(url: URL, timeout: TimeInterval, line: String,
-                  session: URLSession) {
+                  session: URLSession, allowRetry: Bool = true) {
     guard let body = line.data(using: .utf8) else { return }
 
     let method = requestMethod(line) ?? "unknown"
@@ -164,6 +186,7 @@ func forwardFrame(url: URL, timeout: TimeInterval, line: String,
 
     let sem = DispatchSemaphore(value: 0)
     let start = Date()
+    var retryStaleSession = false
 
     let task = session.dataTask(with: req) { data, response, error in
         defer { sem.signal() }
@@ -190,8 +213,30 @@ func forwardFrame(url: URL, timeout: TimeInterval, line: String,
             setSessionID(newSID)
         }
 
-        guard let data = data, !data.isEmpty, status != 202 else {
+        // A restarted server has never seen our cached session, so it rejects
+        // every subsequent request. Drop the session and retry once with a
+        // fresh handshake rather than returning nothing.
+        if (status == 400 || status == 404), getSessionID() != nil, allowRetry {
+            log("<- \(method) id=\(rid) \(status) stale session — re-initializing")
+            clearSessionID()
+            retryStaleSession = true
+            return
+        }
+
+        if status == 202 {
+            log("<- \(method) id=\(rid) 202 empty [\(String(format: "%.3f", elapsed))s]")
+            return
+        }
+
+        guard let data = data, !data.isEmpty else {
             log("<- \(method) id=\(rid) \(status) empty [\(String(format: "%.3f", elapsed))s]")
+            respondError(line, "bridge: empty response (HTTP \(status))")
+            return
+        }
+
+        if status < 200 || status >= 300 {
+            log("<- \(method) id=\(rid) \(status) \(data.count)B [\(String(format: "%.3f", elapsed))s]")
+            respondError(line, "bridge: HTTP \(status)")
             return
         }
 
@@ -208,6 +253,12 @@ func forwardFrame(url: URL, timeout: TimeInterval, line: String,
     }
     task.resume()
     sem.wait()
+
+    if retryStaleSession {
+        _ = waitForServer(url: url, maxWait: 10)
+        forwardFrame(url: url, timeout: timeout, line: line,
+                     session: session, allowRetry: false)
+    }
 }
 
 // MARK: - Startup health check
