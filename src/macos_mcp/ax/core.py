@@ -2366,6 +2366,45 @@ def GetDefaultLanguage() -> str:
         return "en-US"
 
 
+_MAX_TIMEOUT_ENV = "MACOS_MCP_MAX_TIMEOUT"
+_DEFAULT_MAX_TIMEOUT = 240
+
+
+def _clamp_timeout(timeout: int) -> int:
+    """Cap the timeout below the MCP client's own wall-clock ceiling.
+
+    Clients abandon a call after a few minutes and close the stream. If the
+    server is still running the command then, it produces no reply, the caller
+    hangs, and the child is orphaned until our own timeout fires. Clamping
+    guarantees we answer inside the client's window.
+    """
+    import os
+
+    try:
+        cap = int(os.environ.get(_MAX_TIMEOUT_ENV, _DEFAULT_MAX_TIMEOUT))
+    except ValueError:
+        cap = _DEFAULT_MAX_TIMEOUT
+    return min(timeout, cap) if cap > 0 else timeout
+
+
+def _combine(stdout: str, stderr: str) -> str:
+    """Return both streams. `stdout or stderr` silently dropped stderr whenever
+    a command wrote anything to stdout, hiding errors like
+    `foo: command not found` behind partial success output."""
+    if stdout and stderr:
+        return stdout.rstrip("\n") + "\n" + stderr
+    return stdout or stderr or ""
+
+
+def _timeout_message(timeout: int, requested: int, partial: str) -> str:
+    msg = f"Command timed out after {timeout} seconds"
+    if requested > timeout:
+        msg += f" (requested {requested}s, capped by {_MAX_TIMEOUT_ENV})"
+    if partial.strip():
+        msg += "\n--- partial output before timeout ---\n" + partial.rstrip("\n")
+    return msg
+
+
 def ExecuteCommand(
     command: str, mode: str = "shell", timeout: int = 10
 ) -> Tuple[str, int]:
@@ -2384,6 +2423,8 @@ def ExecuteCommand(
     import signal
     import tempfile
 
+    requested = timeout
+    timeout = _clamp_timeout(timeout)
     env = os.environ.copy()
     argv = (
         ["osascript", "-e", command]
@@ -2422,13 +2463,18 @@ def ExecuteCommand(
                 except OSError:
                     proc.kill()
                 proc.wait()
-                return (f"Command timed out after {timeout} seconds", -1)
+                out_f.seek(0)
+                err_f.seek(0)
+                partial = _combine(
+                    out_f.read().decode("utf-8", "replace"),
+                    err_f.read().decode("utf-8", "replace"),
+                )
+                return (_timeout_message(timeout, requested, partial), -1)
             out_f.seek(0)
             err_f.seek(0)
             stdout = out_f.read().decode("utf-8", "replace")
             stderr = err_f.read().decode("utf-8", "replace")
-            output = stdout or stderr or ""
-            return (output.strip(), proc.returncode)
+            return (_combine(stdout, stderr).strip(), proc.returncode)
     except Exception as e:
         return (str(e), -1)
 
@@ -2454,7 +2500,10 @@ async def AsyncExecuteCommand(
     """
     import os
     import signal
+    import tempfile
 
+    requested = timeout
+    timeout = _clamp_timeout(timeout)
     env = os.environ.copy()
     argv = (
         ["osascript", "-e", command]
@@ -2462,35 +2511,46 @@ async def AsyncExecuteCommand(
         else ["/bin/bash", "-c", command]
     )
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *argv,
-            stdin=subprocess.DEVNULL,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-            start_new_session=True,
-        )
-        try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
+        # Capture to temp files rather than pipes: a backgrounded grandchild
+        # (`cmd &`) inherits the capture fds and holds a *pipe* open after the
+        # direct child exits, so communicate() blocks for the full timeout and
+        # reports a spurious timeout for a command that finished instantly.
+        # A regular file has no such reader/writer coupling, and it also means
+        # partial output survives a timeout.
+        with tempfile.TemporaryFile() as out_f, tempfile.TemporaryFile() as err_f:
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
+                stdin=subprocess.DEVNULL,
+                stdout=out_f,
+                stderr=err_f,
+                env=env,
+                start_new_session=True,
             )
-        except asyncio.TimeoutError:
-            # Kill the entire process group, same as the sync version.
             try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except OSError:
-                proc.kill()
-            # Drain any remaining output after kill.
-            try:
-                await proc.wait()
-            except Exception:
-                pass
-            return (f"Command timed out after {timeout} seconds", -1)
+                await asyncio.wait_for(proc.wait(), timeout=timeout)
+            except asyncio.TimeoutError:
+                # Kill the entire process group, same as the sync version.
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except OSError:
+                    proc.kill()
+                try:
+                    await proc.wait()
+                except Exception:
+                    pass
+                out_f.seek(0)
+                err_f.seek(0)
+                partial = _combine(
+                    out_f.read().decode("utf-8", "replace"),
+                    err_f.read().decode("utf-8", "replace"),
+                )
+                return (_timeout_message(timeout, requested, partial), -1)
 
-        stdout = stdout_bytes.decode("utf-8", "replace") if stdout_bytes else ""
-        stderr = stderr_bytes.decode("utf-8", "replace") if stderr_bytes else ""
-        output = stdout or stderr or ""
-        return (output.strip(), proc.returncode)
+            out_f.seek(0)
+            err_f.seek(0)
+            stdout = out_f.read().decode("utf-8", "replace")
+            stderr = err_f.read().decode("utf-8", "replace")
+            return (_combine(stdout, stderr).strip(), proc.returncode)
     except Exception as e:
         return (str(e), -1)
 
