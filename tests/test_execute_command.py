@@ -11,6 +11,7 @@ implementation misbehaved under the stdio transport:
 3. On a real timeout only /bin/bash was killed, leaving its descendants alive.
 """
 
+import asyncio
 import os
 import signal
 import subprocess
@@ -18,7 +19,7 @@ import time
 
 import pytest
 
-from macos_mcp.ax.core import ExecuteCommand
+from macos_mcp.ax.core import AsyncExecuteCommand, ExecuteCommand
 
 
 @pytest.fixture
@@ -70,8 +71,15 @@ class TestExecuteCommandOutput:
     def test_stderr_used_when_stdout_empty(self):
         assert "oops" in ExecuteCommand("echo oops >&2")[0]
 
-    def test_stdout_preferred_over_stderr(self):
-        assert ExecuteCommand("echo out; echo err >&2")[0] == "out"
+    def test_stdout_and_stderr_both_returned(self):
+        """Both streams come back.
+
+        `stdout or stderr` used to discard stderr whenever a command wrote
+        anything at all to stdout, hiding failures like `foo: command not
+        found` behind partial success output.
+        """
+        out = ExecuteCommand("echo out; echo err >&2")[0]
+        assert "out" in out and "err" in out
 
     def test_non_ascii_output(self):
         assert ExecuteCommand("echo '日本語 🎉'")[0] == "日本語 🎉"
@@ -121,3 +129,53 @@ class TestExecuteCommandProcessGroup:
             "Command timed out after 2 seconds",
             -1,
         )
+
+
+class TestExecuteCommandTimeoutBehaviour:
+    """Output salvage and the client-ceiling clamp."""
+
+    def test_partial_output_survives_timeout(self):
+        out, code = ExecuteCommand("echo before-timeout; sleep 30", timeout=2)
+        assert code == -1
+        assert "Command timed out after 2 seconds" in out
+        assert "before-timeout" in out
+
+    def test_timeout_clamped_below_client_ceiling(self, monkeypatch):
+        """A caller asking for more than the cap must still get an answer.
+
+        MCP clients abandon a call after a few minutes and close the stream;
+        a server still running at that point never replies and the caller
+        hangs, with the child left orphaned.
+        """
+        monkeypatch.setenv("MACOS_MCP_MAX_TIMEOUT", "3")
+        start = time.monotonic()
+        out, code = ExecuteCommand("sleep 30", timeout=600)
+        elapsed = time.monotonic() - start
+        assert code == -1
+        assert elapsed < 8, f"took {elapsed:.1f}s; clamp did not apply"
+        assert "capped" in out
+
+
+class TestAsyncExecuteCommand:
+    """The async path had its own copy of the pipe bug."""
+
+    def test_async_returns_both_streams(self):
+        out, _ = asyncio.run(AsyncExecuteCommand("echo out; echo err >&2"))
+        assert "out" in out and "err" in out
+
+    def test_async_partial_output_survives_timeout(self):
+        out, code = asyncio.run(
+            AsyncExecuteCommand("echo before-timeout; sleep 30", timeout=2)
+        )
+        assert code == -1 and "before-timeout" in out
+
+    def test_async_backgrounded_job_does_not_trigger_timeout(self, sentinel):
+        """asyncio.subprocess.PIPE had the same reader/writer coupling as the
+        sync path: a backgrounded grandchild held the pipe open, so an instant
+        command was reported as timing out."""
+        script, live, _ = sentinel
+        start = time.monotonic()
+        result = asyncio.run(AsyncExecuteCommand(f"echo done; {script} &", timeout=8))
+        elapsed = time.monotonic() - start
+        assert result == ("done", 0)
+        assert elapsed < 3, f"returned in {elapsed:.1f}s; pipe still held open"
