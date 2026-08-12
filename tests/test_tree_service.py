@@ -29,6 +29,37 @@ class TestTreeOnFocusChanged:
 
 
 @pytest.mark.unit
+class TestTreeMenuBarExtras:
+    def test_probe_drains_threadpool_autorelease_pool(self, mocker):
+        app = MagicMock()
+        app.activationPolicy.return_value = 1
+        app.bundleIdentifier.return_value = "com.example.menu"
+        app.processIdentifier.return_value = 123
+
+        workspace = MagicMock()
+        workspace.runningApplications.return_value = [app]
+        nsworkspace = MagicMock()
+        nsworkspace.sharedWorkspace.return_value = workspace
+        mocker.patch("macos_mcp.tree.service.NSWorkspace", nsworkspace)
+
+        extras = MagicMock()
+        extras.GetChildren.return_value = [object()]
+        control = MagicMock()
+        control.ExtrasMenuBar = extras
+        mocker.patch("macos_mcp.tree.service.ax.Control", return_value=control)
+        mocker.patch.object(Tree, "_extras_cache", None)
+
+        pool = mocker.patch("macos_mcp.tree.service.objc.autorelease_pool")
+        pool_context = MagicMock()
+        pool.return_value = pool_context
+
+        assert Tree._bundles_with_menu_bar_extras() == ["com.example.menu"]
+        pool.assert_called_once_with()
+        pool_context.__enter__.assert_called_once_with()
+        pool_context.__exit__.assert_called_once()
+
+
+@pytest.mark.unit
 class TestTreeGetState:
     """Tests for Tree.get_state method."""
 

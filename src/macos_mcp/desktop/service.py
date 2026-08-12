@@ -7,6 +7,7 @@ from macos_mcp.tree.service import Tree
 from concurrent.futures import ThreadPoolExecutor
 import macos_mcp.ax as ax
 import asyncio
+import objc
 import requests
 import logging
 import random
@@ -16,6 +17,16 @@ import os
 import time
 
 logger = logging.getLogger(__name__)
+
+
+def _call_with_autorelease_pool(func, /, *args, **kwargs):
+    """Run Objective-C/PyObjC work with a pool on a secondary worker thread."""
+    with objc.autorelease_pool():
+        return func(*args, **kwargs)
+
+
+async def _to_thread_with_autorelease_pool(func, /, *args, **kwargs):
+    return await asyncio.to_thread(_call_with_autorelease_pool, func, *args, **kwargs)
 
 
 class Desktop:
@@ -397,6 +408,10 @@ class Desktop:
                 bundle_id=bundle_id,
             )
 
+        def _describe_pooled(app) -> Optional[Window]:
+            with objc.autorelease_pool():
+                return _describe(app)
+
         # Each application is several accessibility calls, and the first call to
         # a process costs far more than later ones because the connection has to
         # be established. Serially that dominates a cold capture; these are
@@ -406,7 +421,7 @@ class Desktop:
         with ThreadPoolExecutor(
             max_workers=min(12, len(apps)), thread_name_prefix="ax-window-scan"
         ) as pool:
-            described = list(pool.map(_describe, apps))
+            described = list(pool.map(_describe_pooled, apps))
 
         return [window for window in described if window is not None]
 
@@ -615,7 +630,7 @@ class Desktop:
         as_bytes: bool = False,
         scale: float = 1.0,
     ):
-        return await asyncio.to_thread(
+        return await _to_thread_with_autorelease_pool(
             self.get_state, use_vision, as_bytes, scale
         )
 
@@ -626,7 +641,7 @@ class Desktop:
         window_loc: Optional[Tuple[int, int]] = None,
         window_size: Optional[Tuple[int, int]] = None,
     ) -> str:
-        return await asyncio.to_thread(self.app, mode, name, window_loc, window_size)
+        return await _to_thread_with_autorelease_pool(self.app, mode, name, window_loc, window_size)
 
     async def async_click(
         self,
@@ -634,7 +649,7 @@ class Desktop:
         button: Literal["left", "right", "middle"] = "left",
         clicks: int = 1,
     ) -> None:
-        await asyncio.to_thread(self.click, loc, button, clicks)
+        await _to_thread_with_autorelease_pool(self.click, loc, button, clicks)
 
     async def async_type(
         self,
@@ -644,7 +659,7 @@ class Desktop:
         clear: bool = False,
         press_enter: bool = False,
     ) -> None:
-        await asyncio.to_thread(self.type, loc, text, caret_position, clear, press_enter)
+        await _to_thread_with_autorelease_pool(self.type, loc, text, caret_position, clear, press_enter)
 
     async def async_scroll(
         self,
@@ -653,16 +668,16 @@ class Desktop:
         direction: Literal["up", "down", "left", "right"],
         wheel_times: int = 1,
     ) -> Optional[str]:
-        return await asyncio.to_thread(self.scroll, loc, scroll_type, direction, wheel_times)
+        return await _to_thread_with_autorelease_pool(self.scroll, loc, scroll_type, direction, wheel_times)
 
     async def async_move(self, loc: Tuple[int, int]) -> None:
-        await asyncio.to_thread(self.move, loc)
+        await _to_thread_with_autorelease_pool(self.move, loc)
 
     async def async_drag(self, loc: Tuple[int, int]) -> None:
-        await asyncio.to_thread(self.drag, loc)
+        await _to_thread_with_autorelease_pool(self.drag, loc)
 
     async def async_shortcut(self, shortcut: str) -> None:
-        await asyncio.to_thread(self.shortcut, shortcut)
+        await _to_thread_with_autorelease_pool(self.shortcut, shortcut)
 
     async def async_wait(self, duration: int) -> None:
         """Use asyncio.sleep instead of time.sleep to avoid blocking."""
@@ -685,4 +700,4 @@ class Desktop:
         open_delay: float = 0.9,
         close_after: bool = True,
     ) -> str:
-        return await asyncio.to_thread(self.create_desktop_space, open_delay, close_after)
+        return await _to_thread_with_autorelease_pool(self.create_desktop_space, open_delay, close_after)
