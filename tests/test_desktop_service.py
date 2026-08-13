@@ -548,6 +548,41 @@ class TestDesktopAsyncAPI:
         assert result is sentinel
         mock_get_state.assert_called_once_with(False, False, 1.0)
 
+    async def test_async_get_state_drains_worker_autorelease_pool(self, mocker):
+        """PyObjC work offloaded with to_thread must drain a worker-local pool."""
+        pool = mocker.patch("macos_mcp.desktop.service.objc.autorelease_pool")
+        pool_context = MagicMock()
+        pool.return_value = pool_context
+        mocker.patch.object(Desktop, "get_state", return_value=object())
+
+        await Desktop().async_get_state(use_vision=False, scale=1.0)
+
+        pool.assert_called_once_with()
+        pool_context.__enter__.assert_called_once_with()
+        pool_context.__exit__.assert_called_once()
+
+    def test_get_windows_drains_threadpool_autorelease_pool(self, mocker):
+        """Per-app window probes must drain a pool on executor worker threads."""
+        app = MagicMock()
+        app.BundleIdentifier = "com.example.app"
+        app.Name = "Example"
+        app.PID = 123
+        app.Status = Status.WINDOWLESS.value
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.GetRunningApplications",
+            return_value=[app],
+        )
+        pool = mocker.patch("macos_mcp.desktop.service.objc.autorelease_pool")
+        pool_context = MagicMock()
+        pool.return_value = pool_context
+
+        windows = Desktop().get_windows()
+
+        assert len(windows) == 1
+        pool.assert_called_once_with()
+        pool_context.__enter__.assert_called_once_with()
+        pool_context.__exit__.assert_called_once()
+
     async def test_async_methods_do_not_block_the_event_loop(self, mocker):
         """A slow sync call must leave the loop free to run other tasks.
 

@@ -97,6 +97,10 @@ class Tree:
                 pass
             return None
 
+        def _has_extras_pooled(app):
+            with objc.autorelease_pool():
+                return _has_extras(app)
+
         # Probed in parallel. The first accessibility call to a process is far
         # more expensive than later ones -- roughly 8ms against microseconds --
         # because the connection has to be established, and there are ~50
@@ -112,7 +116,7 @@ class Tree:
                 max_workers=min(12, len(candidates)),
                 thread_name_prefix="ax-extras-probe",
             ) as pool:
-                bundle_ids = [b for b in pool.map(_has_extras, candidates) if b]
+                bundle_ids = [b for b in pool.map(_has_extras_pooled, candidates) if b]
 
         cls._extras_cache = (key, bundle_ids)
         return bundle_ids
