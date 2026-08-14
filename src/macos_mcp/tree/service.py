@@ -98,6 +98,7 @@ class Tree:
             return None
 
         def _has_extras_pooled(app):
+            # Worker threads are long-lived; drain PyObjC autoreleases per task.
             with objc.autorelease_pool():
                 return _has_extras(app)
 

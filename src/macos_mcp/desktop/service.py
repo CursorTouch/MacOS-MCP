@@ -409,6 +409,7 @@ class Desktop:
             )
 
         def _describe_pooled(app) -> Optional[Window]:
+            # Worker threads are long-lived; drain PyObjC autoreleases per task.
             with objc.autorelease_pool():
                 return _describe(app)
 
@@ -659,7 +660,9 @@ class Desktop:
         clear: bool = False,
         press_enter: bool = False,
     ) -> None:
-        await _to_thread_with_autorelease_pool(self.type, loc, text, caret_position, clear, press_enter)
+        await _to_thread_with_autorelease_pool(
+            self.type, loc, text, caret_position, clear, press_enter
+        )
 
     async def async_scroll(
         self,
@@ -668,7 +671,9 @@ class Desktop:
         direction: Literal["up", "down", "left", "right"],
         wheel_times: int = 1,
     ) -> Optional[str]:
-        return await _to_thread_with_autorelease_pool(self.scroll, loc, scroll_type, direction, wheel_times)
+        return await _to_thread_with_autorelease_pool(
+            self.scroll, loc, scroll_type, direction, wheel_times
+        )
 
     async def async_move(self, loc: Tuple[int, int]) -> None:
         await _to_thread_with_autorelease_pool(self.move, loc)
@@ -700,4 +705,6 @@ class Desktop:
         open_delay: float = 0.9,
         close_after: bool = True,
     ) -> str:
-        return await _to_thread_with_autorelease_pool(self.create_desktop_space, open_delay, close_after)
+        return await _to_thread_with_autorelease_pool(
+            self.create_desktop_space, open_delay, close_after
+        )
