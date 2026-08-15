@@ -734,6 +734,9 @@ def serve(ctx, transport, host, port, debug, config, auth_key, allow_insecure_re
                 show_banner=False,
                 middleware=_http_middleware(auth_key=auth_key, ip_allowlist=parsed_allowlist, oauth_validator=oauth_validator),
                 uvicorn_config=uvicorn_config or None,
+                # No tools need per-client HTTP session state; avoid retaining
+                # abandoned SDK transports when clients reconnect without DELETE.
+                stateless_http=transport == "streamable-http",
             )
         case _:
             raise ValueError(f"Invalid transport: {transport}")
