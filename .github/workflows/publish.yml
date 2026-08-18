@@ -34,6 +34,16 @@ jobs:
       - name: Build distributions
         run: uv build
 
+      # The Claude Desktop extension vendors this source tree, so it only
+      # updates when a fresh bundle is built and resubmitted. Building it here
+      # -- before the PyPI publish -- means a broken bundle fails the whole
+      # release instead of letting PyPI run ahead of the extension again
+      # (#19, #57).
+      - name: Build Claude Desktop extension bundle
+        run: |
+          npm install -g @anthropic-ai/mcpb
+          mcpb pack . "dist/macos-mcp-${{ github.ref_name }}.mcpb"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -45,4 +55,5 @@ jobs:
         run: |
           gh release create ${{ github.ref_name }} \
             dist/* \
-            --generate-notes
+            --generate-notes \
+            --notes "**Release checklist:** the \`.mcpb\` bundle attached below must be manually resubmitted to the Anthropic extension directory — the published extension does not update itself (#19, #57)."
