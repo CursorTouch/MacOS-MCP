@@ -163,6 +163,17 @@ class TestDesktopInput:
         desktop.shortcut("command+shift+s")
         mock_hotkey.assert_called_once_with("command", "shift", "s")
 
+    @pytest.mark.parametrize("shortcut", ["", " ", "+c", "command+", "command++c", "command+ +c"])
+    def test_shortcut_rejects_empty_key_segments(self, mocker, shortcut):
+        """Malformed separators must not reach HotKey as empty key names."""
+        mock_hotkey = mocker.patch("macos_mcp.desktop.service.ax.HotKey")
+        desktop = Desktop()
+
+        with pytest.raises(ValueError, match="non-empty key names"):
+            desktop.shortcut(shortcut)
+
+        mock_hotkey.assert_not_called()
+
 
 @pytest.mark.unit
 class TestDesktopType:

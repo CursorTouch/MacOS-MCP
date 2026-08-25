@@ -228,6 +228,10 @@ class Desktop:
     def shortcut(self, shortcut: str) -> None:
         """Execute keyboard shortcut (e.g. 'command+c')."""
         keys = [k.strip().lower() for k in shortcut.split("+")]
+        if not keys or any(not key for key in keys):
+            raise ValueError(
+                "shortcut must contain non-empty key names separated by '+'"
+            )
         ax.HotKey(*keys)
 
     def scrape(self, url: str) -> str:
