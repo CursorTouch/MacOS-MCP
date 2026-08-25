@@ -39,6 +39,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+import plistlib
 import secrets
 import shutil
 import socket
@@ -936,28 +937,15 @@ def _resolve_program() -> list[str]:
 def _build_plist(program_args: list[str]) -> str:
     log_out = CONFIG_DIR / "server.log"
     log_err = CONFIG_DIR / "server.error.log"
-    args_xml = "\n".join(f"        <string>{a}</string>" for a in program_args)
-    return f"""\
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>{_AGENT_LABEL}</string>
-    <key>ProgramArguments</key>
-    <array>
-{args_xml}
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>{log_out}</string>
-    <key>StandardErrorPath</key>
-    <string>{log_err}</string>
-</dict>
-</plist>"""
+    payload = {
+        "Label": _AGENT_LABEL,
+        "ProgramArguments": program_args,
+        "RunAtLoad": True,
+        "KeepAlive": True,
+        "StandardOutPath": str(log_out),
+        "StandardErrorPath": str(log_err),
+    }
+    return plistlib.dumps(payload, fmt=plistlib.FMT_XML, sort_keys=False).decode("utf-8")
 
 
 def _launchctl(*args: str) -> subprocess.CompletedProcess:
