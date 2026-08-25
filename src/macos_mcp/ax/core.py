@@ -1220,15 +1220,17 @@ def _capture_screen_via_screencapture(rect=None):
 
     Returns a CGImage, or None on failure.
     """
+    import errno
     import os
     import subprocess
     import tempfile
 
     import Foundation
 
-    fd, tmp_path = tempfile.mkstemp(suffix=".png")
-    os.close(fd)
+    tmp_path = None
     try:
+        fd, tmp_path = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
         cmd = ["/usr/sbin/screencapture", "-x"]
         if rect is not None:
             try:
@@ -1256,13 +1258,20 @@ def _capture_screen_via_screencapture(rect=None):
             return None
         return Quartz.CGImageSourceCreateImageAtIndex(source, 0, None)
     except Exception as e:
-        logger.error(f"Fallback screenshot capture failed: {e}")
+        if isinstance(e, OSError) and e.errno == errno.ENOSPC:
+            logger.error(
+                "Fallback screenshot capture failed: no space left on device "
+                "for the temporary capture file"
+            )
+        else:
+            logger.error(f"Fallback screenshot capture failed: {e}")
         return None
     finally:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
+        if tmp_path is not None:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 def CaptureScreen(rect=None):
