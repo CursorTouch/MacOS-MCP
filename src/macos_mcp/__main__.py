@@ -45,6 +45,7 @@ import socket
 import signal
 import subprocess
 import sys
+import time
 from threading import Lock
 import click
 
@@ -964,6 +965,58 @@ def _launchctl(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["launchctl", *args], capture_output=True, text=True)
 
 
+def _launchctl_field(output: str, field: str) -> str | None:
+    prefix = f"{field} = "
+    for line in output.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            return stripped[len(prefix) :]
+    return None
+
+
+def _server_accepting_connections(host: str, port: int) -> bool:
+    probe_host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+    try:
+        with socket.create_connection((probe_host, port), timeout=0.1):
+            return True
+    except OSError:
+        return False
+
+
+def _wait_for_launch_agent_start(
+    domain: str, host: str, port: int, timeout: float = 1.0
+) -> tuple[bool, str]:
+    """Briefly verify that a freshly bootstrapped agent did not immediately exit."""
+    deadline = time.monotonic() + timeout
+    saw_running = False
+
+    while True:
+        result = _launchctl("print", f"{domain}/{_AGENT_LABEL}")
+        if result.returncode != 0:
+            detail = result.stderr.strip() or "launchctl print could not find the service"
+            return False, detail
+
+        state = _launchctl_field(result.stdout, "state")
+        last_exit = _launchctl_field(result.stdout, "last exit code")
+        last_signal = _launchctl_field(result.stdout, "last terminating signal")
+        if last_exit and last_exit != "(never exited)":
+            return False, f"state={state or 'unknown'}, last exit code={last_exit}"
+        if last_signal:
+            return False, f"state={state or 'unknown'}, last terminating signal={last_signal}"
+        if state == "running":
+            saw_running = True
+            if _server_accepting_connections(host, port):
+                return True, "accepting connections"
+
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(0.1)
+
+    if saw_running:
+        return True, "process is running; endpoint is still starting"
+    return False, "launch agent did not reach a running state"
+
+
 @main.command()
 @click.option(
     "--transport",
@@ -1008,7 +1061,14 @@ def install(transport: str, host: str, port: int, force: bool) -> None:
     if result.returncode != 0:
         raise click.ClickException(f"launchctl bootstrap failed:\n{result.stderr.strip()}")
 
-    click.echo(f"Launch agent loaded — server is starting now.")
+    started, detail = _wait_for_launch_agent_start(domain, host, port)
+    if not started:
+        raise click.ClickException(
+            "Launch agent loaded but the server failed to stay running "
+            f"({detail}).\nCheck {CONFIG_DIR / 'server.error.log'} for startup errors."
+        )
+
+    click.echo(f"Launch agent loaded — {detail}.")
     click.echo(f"  Transport : {transport}")
     click.echo(f"  Address   : {host}:{port}")
     click.echo(f"  Logs      : {CONFIG_DIR / 'server.log'}")
