@@ -258,8 +258,7 @@ async def state_tool(use_vision: bool = False, ctx: Context = None):
     windows = desktop_state.windows_to_string()
     active_window = desktop_state.active_window_to_string()
 
-    return [
-        dedent(f"""
+    snapshot = dedent(f"""
     Focused Window:
     {active_window}
 
@@ -272,7 +271,16 @@ async def state_tool(use_vision: bool = False, ctx: Context = None):
     List of Scrollable Elements:
     {scrollable_elements or "No scrollable elements found."}
     """)
-    ] + (
+
+    if use_vision and not desktop_state.screenshot:
+        # Screen capture fails transiently (display sleep/lock, monitor hot-plug).
+        # Say so rather than returning a text-only snapshot that looks complete.
+        snapshot += dedent("""
+    Note: Screenshot capture failed, so no annotated image is attached. The elements
+    listed above are still valid; call Snapshot again if you need the screenshot.
+    """)
+
+    return [snapshot] + (
         [Image(data=desktop_state.screenshot, format="png")]
         if use_vision and desktop_state.screenshot
         else []

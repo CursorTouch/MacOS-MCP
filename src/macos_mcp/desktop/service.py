@@ -443,7 +443,16 @@ class Desktop:
         Returns:
             PIL Image, PNG bytes, or None on failure.
         """
-        image = ImageGrab.grab(all_screens=True)
+        try:
+            image = ImageGrab.grab(all_screens=True)
+        except Exception as e:
+            # ImageGrab shells out to screencapture, which intermittently fails
+            # ("could not create image from display") when display state changes
+            # mid-capture — sleep/lock, monitor hot-plug, Space switch — and leaves
+            # an undecodable file that Image.open rejects. Report the failure to the
+            # caller instead of propagating it out of the tool call.
+            logger.error(f"Screenshot capture failed: {e}")
+            return None
         if as_bytes:
             buf = io.BytesIO()
             image.save(buf, format="PNG")
@@ -470,7 +479,9 @@ class Desktop:
         img = self.get_screenshot()
         if img is None:
             logger.warning(
-                "Screenshot capture failed. Grant Screen Recording permission in System Settings > Privacy & Security."
+                "Screenshot capture failed; returning no annotated screenshot. If this "
+                "persists, check Screen Recording permission in System Settings > "
+                "Privacy & Security."
             )
             return None
         padding = 5
