@@ -30,6 +30,7 @@ from .core import (
     Point,
     Size,
     GetAttribute,
+    GetMultipleAttributeValues,
     SetAttribute,
     GetParameterizedAttribute,
     GetAttributeNames,
@@ -1467,6 +1468,33 @@ class ApplicationControl(Control):
         return []
 
     @property
+    def ModalDialog(self) -> Optional[Control]:
+        """The sheet or modal window currently blocking this application.
+
+        Two shapes exist. A sheet hangs off the main window (native save
+        panels, Chrome's upload picker). A standalone AXModal window is its
+        own AXWindow with subrole AXDialog -- an NSAlert run modally, Finder's
+        `display dialog`, Electron's showMessageBox without a parent, Docker
+        Desktop's restart alert. The latter is never the main window, because
+        panels cannot become main, so a caller rooted at MainWindow walks the
+        inert window behind it and never sees the dialog.
+
+        While either is up the rest of the application -- the window behind
+        it and its menus -- is inert even though it still reports itself as
+        enabled.
+        """
+        main_window = self.MainWindow
+        if main_window and (sheet := main_window.Sheet):
+            return sheet
+        for window in self.Windows:
+            attrs = GetMultipleAttributeValues(
+                window.Element, [Attribute.Modal, Attribute.Minimized]
+            )
+            if attrs.get(Attribute.Modal) and not attrs.get(Attribute.Minimized):
+                return window
+        return None
+
+    @property
     def IsApplicationRunning(self) -> bool:
         """Check if the application is running (AX attribute)."""
         val = GetAttribute(self.Element, Attribute.IsApplicationRunning)
@@ -1807,6 +1835,20 @@ class WindowControl(Control):
             y: Y coordinate.
         """
         return SetAttribute(self.Element, Attribute.Position, (x, y))
+
+    @property
+    def Sheet(self) -> Optional[Control]:
+        """The sheet attached to this window, if one is open.
+
+        AXModal is not a usable signal for this: Chrome leaves it False on
+        the browser window while its file upload picker is open, and the
+        picker is plainly modal. The AXSheet child is what Chrome and native
+        save panels have in common.
+        """
+        for child in self.GetChildren():
+            if GetAttribute(child.Element, Attribute.Role) == Role.Sheet:
+                return child
+        return None
 
     @property
     def DefaultButton(self) -> Optional[Control]:

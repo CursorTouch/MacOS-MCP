@@ -32,6 +32,14 @@ class Window:
     bounding_box: BoundingBox
     pid: int
     bundle_id: str
+    # Title of the sheet or modal dialog currently blocking the app, if any.
+    dialog: str | None = None
+
+    def to_string(self) -> str:
+        line = f"{self.name} ({self.bundle_id}) - {self.status.value}"
+        if self.dialog:
+            line += f' - dialog: "{self.dialog}"'
+        return line
 
 
 @dataclass
@@ -45,12 +53,10 @@ class DesktopState:
         """Format windows list for display."""
         if not self.windows:
             return "No open applications."
-        lines = [f"{w.name} ({w.bundle_id}) - {w.status.value}" for w in self.windows]
-        return "\n".join(lines)
+        return "\n".join(w.to_string() for w in self.windows)
 
     def active_window_to_string(self) -> str:
         """Format active window for display."""
         if self.active_window is None:
             return "No focused window."
-        w = self.active_window
-        return f"{w.name} ({w.bundle_id}) - {w.status.value}"
+        return self.active_window.to_string()

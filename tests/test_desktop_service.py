@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock, MagicMock, patch, call
 from macos_mcp.desktop.service import Desktop
 from macos_mcp.desktop.views import Window, Status, DesktopState, Size
 from macos_mcp.tree.views import BoundingBox, TreeState, Center
+from macos_mcp.tree.service import Tree
 
 
 @pytest.mark.unit
@@ -585,6 +586,7 @@ class TestDesktopAsyncAPI:
             "macos_mcp.desktop.service.ax.GetRunningApplications",
             return_value=[app],
         )
+        mocker.patch.object(Tree, "bundles_with_menu_bar_extras", return_value=[])
         pool = mocker.patch("macos_mcp.desktop.service.objc.autorelease_pool")
         pool_context = MagicMock()
         pool.return_value = pool_context
@@ -596,6 +598,63 @@ class TestDesktopAsyncAPI:
         pool_context.__enter__.assert_called_once_with()
         pool_context.__exit__.assert_called_once()
 
+    def test_get_windows_lists_background_app_only_while_its_dialog_is_up(
+        self, mocker
+    ):
+        """Docker Desktop is an accessory app, so it is normally absent from the
+        list; its restart alert makes it appear, named after the alert."""
+        regular = MagicMock()
+        regular.BundleIdentifier = "com.example.app"
+        regular.Name = "Example"
+        regular.PID = 123
+        regular.Status = Status.WINDOWLESS.value
+
+        heading = MagicMock()
+        dialog = MagicMock()
+        dialog.Title = ""
+        dialog.GetChildren.return_value = [heading]
+
+        docker = MagicMock()
+        docker.BundleIdentifier = "com.electron.dockerdesktop"
+        docker.Name = "Docker Desktop"
+        docker.PID = 456
+        docker.Status = Status.VISIBLE.value
+        docker.MainWindow = None
+        docker.ModalDialog = dialog
+
+        idle = MagicMock()
+        idle.BundleIdentifier = "com.example.ollama"
+        idle.Name = "Ollama"
+        idle.PID = 789
+        idle.Status = Status.WINDOWLESS.value
+
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.GetRunningApplications",
+            return_value=[regular],
+        )
+        mocker.patch.object(
+            Tree,
+            "bundles_with_menu_bar_extras",
+            return_value=[docker.BundleIdentifier, idle.BundleIdentifier],
+        )
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.GetRunningApplicationByBundleId",
+            side_effect=lambda bid: {
+                docker.BundleIdentifier: docker,
+                idle.BundleIdentifier: idle,
+            }[bid],
+        )
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.GetMultipleAttributeValues",
+            return_value={"AXRole": "AXStaticText", "AXValue": "Restart Docker Desktop"},
+        )
+
+        windows = Desktop().get_windows()
+
+        assert [(w.name, w.dialog) for w in windows] == [
+            ("Example", None),
+            ("Docker Desktop", "Restart Docker Desktop"),
+        ]
     async def test_async_methods_do_not_block_the_event_loop(self, mocker):
         """A slow sync call must leave the loop free to run other tasks.
 

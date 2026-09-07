@@ -52,7 +52,7 @@ class TestTreeMenuBarExtras:
         pool_context = MagicMock()
         pool.return_value = pool_context
 
-        assert Tree._bundles_with_menu_bar_extras() == ["com.example.menu"]
+        assert Tree.bundles_with_menu_bar_extras() == ["com.example.menu"]
         pool.assert_called_once_with()
         pool_context.__enter__.assert_called_once_with()
         pool_context.__exit__.assert_called_once()
@@ -252,6 +252,7 @@ class TestTreeGetNodes:
         mock_app.MenuBar = None
         mock_app.ExtrasMenuBar = None
         mock_app.MainWindow = None
+        mock_app.ModalDialog = None
         mock_app.Windows = []
 
         mocker.patch(
@@ -278,6 +279,7 @@ class TestTreeGetNodes:
         mock_app.Element = MagicMock()
         mock_app.MenuBar = MagicMock()  # Should be skipped with desktop_only=True
         mock_app.MainWindow = None
+        mock_app.ModalDialog = None
         mock_app.Windows = []
 
         mocker.patch(
@@ -296,25 +298,13 @@ class TestTreeGetNodes:
 
 
 @pytest.mark.unit
-class TestTreeModalSheet:
-    """A sheet blocks its application, so only the sheet is worth scanning."""
+class TestTreeModalDialog:
+    """A sheet or modal dialog blocks its application, so only the dialog is
+    worth scanning. Detection lives in ApplicationControl.ModalDialog; the
+    tree just asks."""
 
-    def _mock_app(self, mocker, with_sheet: bool):
-        """An app whose main window optionally has a sheet on it."""
-        sheet = MagicMock()
-        sheet.Element = MagicMock()
-        sheet.BoundingRectangle = MagicMock()
-        toolbar = MagicMock()
-        toolbar.Element = MagicMock()
-
-        roles = {id(toolbar.Element): "AXToolbar"}
-        children = [toolbar]
-        if with_sheet:
-            roles[id(sheet.Element)] = "AXSheet"
-            children.append(sheet)
-
+    def _mock_app(self, mocker, dialog):
         main_window = MagicMock()
-        main_window.GetChildren.return_value = children
         main_window.BoundingRectangle = MagicMock()
 
         app = MagicMock()
@@ -323,49 +313,84 @@ class TestTreeModalSheet:
         app.MenuBar = MagicMock()
         app.ExtrasMenuBar = MagicMock()
         app.MainWindow = main_window
-        app.Windows = []
+        app.ModalDialog = dialog
 
-        mocker.patch(
-            "macos_mcp.tree.service.ax.GetAttribute",
-            side_effect=lambda element, attribute: roles.get(id(element)),
-        )
         mocker.patch(
             "macos_mcp.tree.service.ax.GetRunningApplicationByBundleId",
             return_value=app,
         )
         mocker.patch("macos_mcp.tree.service.ax.SetMessagingTimeout")
         mocker.patch("macos_mcp.tree.service.BoundingBox")
-        return app, main_window, sheet
+        return app, main_window
 
-    def test_modal_sheet_found(self, mocker):
-        """_modal_sheet returns the AXSheet child of a window."""
-        _, main_window, sheet = self._mock_app(mocker, with_sheet=True)
-        assert Tree._modal_sheet(main_window) is sheet
-
-    def test_modal_sheet_absent(self, mocker):
-        """_modal_sheet returns None when no sheet is up."""
-        _, main_window, _ = self._mock_app(mocker, with_sheet=False)
-        assert Tree._modal_sheet(main_window) is None
-
-    def test_get_nodes_scans_only_the_sheet(self, mocker):
-        """With a sheet up, the window behind it and the menus are skipped."""
-        _, main_window, sheet = self._mock_app(mocker, with_sheet=True)
+    def test_get_nodes_scans_only_the_dialog(self, mocker):
+        """With a dialog up, the window behind it and the menus are skipped."""
+        dialog = MagicMock()
+        _, _ = self._mock_app(mocker, dialog)
         mock_traversal = mocker.patch.object(Tree, "tree_traversal")
 
         Tree().get_nodes("com.test.app", is_browser=False)
 
         roots = [c[0][0] for c in mock_traversal.call_args_list]
-        assert roots == [sheet]
+        assert roots == [dialog]
 
-    def test_get_nodes_without_sheet_scans_menus_and_window(self, mocker):
-        """Without a sheet the menu bar and main window are scanned as before."""
-        app, main_window, _ = self._mock_app(mocker, with_sheet=False)
+    def test_get_nodes_without_dialog_scans_menus_and_window(self, mocker):
+        app, main_window = self._mock_app(mocker, None)
         mock_traversal = mocker.patch.object(Tree, "tree_traversal")
 
         Tree().get_nodes("com.test.app", is_browser=False)
 
         roots = [c[0][0] for c in mock_traversal.call_args_list]
         assert roots == [app.MenuBar, app.ExtrasMenuBar, main_window]
+
+@pytest.mark.unit
+class TestTreeExtrasOnly:
+    """A background app scanned for its status icon may also own an on-screen
+    window -- Docker Desktop's restart alert -- without ever being frontmost."""
+
+    def _mock_app(self, mocker, windows):
+        app = MagicMock()
+        app.Name = "Docker Desktop"
+        app.Element = MagicMock()
+        app.MenuBar = MagicMock()
+        app.ExtrasMenuBar = MagicMock()
+        app.MainWindow = None
+        app.Windows = windows
+
+        mocker.patch(
+            "macos_mcp.tree.service.ax.GetRunningApplicationByBundleId",
+            return_value=app,
+        )
+        mocker.patch("macos_mcp.tree.service.ax.SetMessagingTimeout")
+        mocker.patch("macos_mcp.tree.service.BoundingBox")
+        return app
+
+    def test_extras_only_scans_visible_windows_but_not_menubar(self, mocker):
+        dialog = MagicMock()
+        dialog.Element = MagicMock()
+        minimized = MagicMock()
+        minimized.Element = MagicMock()
+        mocker.patch(
+            "macos_mcp.tree.service.ax.GetAttribute",
+            side_effect=lambda element, attribute: element is minimized.Element,
+        )
+        app = self._mock_app(mocker, [dialog, minimized])
+        mock_traversal = mocker.patch.object(Tree, "tree_traversal")
+
+        Tree().get_nodes("com.electron.dockerdesktop", is_browser=False, extras_only=True)
+
+        roots = [c[0][0] for c in mock_traversal.call_args_list]
+        assert roots == [app.ExtrasMenuBar, dialog]
+
+    def test_extras_only_without_windows_scans_only_extras(self, mocker):
+        mocker.patch("macos_mcp.tree.service.ax.GetAttribute", return_value=None)
+        app = self._mock_app(mocker, [])
+        mock_traversal = mocker.patch.object(Tree, "tree_traversal")
+
+        Tree().get_nodes("com.electron.dockerdesktop", is_browser=False, extras_only=True)
+
+        roots = [c[0][0] for c in mock_traversal.call_args_list]
+        assert roots == [app.ExtrasMenuBar]
 
 @pytest.mark.unit
 class TestTreeIntegration:

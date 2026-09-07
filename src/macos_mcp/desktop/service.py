@@ -29,6 +29,25 @@ async def _to_thread_with_autorelease_pool(func, /, *args, **kwargs):
     return await asyncio.to_thread(_call_with_autorelease_pool, func, *args, **kwargs)
 
 
+def _dialog_title(dialog: ax.Control) -> str:
+    """A label for a sheet or modal dialog.
+
+    Alert panels carry no AXTitle -- Docker's restart prompt and Finder's
+    `display dialog` both report '' -- so fall back to the first line of text
+    they show, which is the heading.
+    """
+    if title := dialog.Title:
+        return title
+    for child in dialog.GetChildren():
+        attrs = ax.GetMultipleAttributeValues(
+            child.Element, [ax.Attribute.Role, ax.Attribute.Value]
+        )
+        if attrs.get(ax.Attribute.Role) == "AXStaticText":
+            if text := str(attrs.get(ax.Attribute.Value) or "").strip():
+                return text
+    return "Dialog"
+
+
 class Desktop:
     def __init__(self):
         self.tree = Tree()
@@ -347,6 +366,7 @@ class Desktop:
             status = Status(status_str)
         except ValueError:
             status = Status.ACTIVE
+        dialog = app.ModalDialog
         return Window(
             name=window.Name,
             is_browser=is_browser,
@@ -354,6 +374,7 @@ class Desktop:
             bounding_box=bounding_box,
             pid=app.PID,
             bundle_id=app.BundleIdentifier,
+            dialog=_dialog_title(dialog) if dialog else None,
         )
 
     def get_windows(self) -> list[Window]:
@@ -367,7 +388,22 @@ class Desktop:
         # Get all regular (Dock-visible) applications
         apps = ax.GetRunningApplications(policy="Regular")
 
-        def _describe(app) -> Optional[Window]:
+        # A background app can block itself with an alert without ever being
+        # frontmost -- Docker Desktop's restart prompt. Such apps are not
+        # Regular, so they are listed only while a dialog is up. Limited to
+        # apps with a menu bar extra: those are the ones that raise alerts
+        # from the background, and they have already answered an
+        # accessibility probe, unlike system agents that can stall a call for
+        # seconds.
+        regular_bundle_ids = {app.BundleIdentifier for app in apps}
+        background_apps = [
+            app
+            for bundle_id in self.tree.bundles_with_menu_bar_extras()
+            if bundle_id not in regular_bundle_ids
+            and (app := ax.GetRunningApplicationByBundleId(bundle_id))
+        ]
+
+        def _describe(app, background: bool) -> Optional[Window]:
             bundle_id = app.BundleIdentifier or ""
             if bundle_id in EXCLUDED_BUNDLE_IDS:
                 return None
@@ -387,6 +423,7 @@ class Desktop:
             # Get bounding box from the main window (if any)
             if status in (Status.HIDDEN, Status.MINIMIZED, Status.WINDOWLESS):
                 bbox = empty
+                dialog = None
             else:
                 main_window = app.MainWindow
                 rect = main_window.BoundingRectangle if main_window else None
@@ -402,6 +439,10 @@ class Desktop:
                     if rect
                     else empty
                 )
+                dialog = app.ModalDialog
+
+            if background and dialog is None:
+                return None
 
             return Window(
                 name=app_name,
@@ -410,23 +451,25 @@ class Desktop:
                 bounding_box=bbox,
                 pid=pid,
                 bundle_id=bundle_id,
+                dialog=_dialog_title(dialog) if dialog else None,
             )
 
-        def _describe_pooled(app) -> Optional[Window]:
+        def _describe_pooled(task) -> Optional[Window]:
             # Worker threads are long-lived; drain PyObjC autoreleases per task.
             with objc.autorelease_pool():
-                return _describe(app)
+                return _describe(*task)
 
         # Each application is several accessibility calls, and the first call to
         # a process costs far more than later ones because the connection has to
         # be established. Serially that dominates a cold capture; these are
         # separate processes, so they answer concurrently.
-        if not apps:
+        tasks = [(app, False) for app in apps] + [(app, True) for app in background_apps]
+        if not tasks:
             return []
         with ThreadPoolExecutor(
-            max_workers=min(12, len(apps)), thread_name_prefix="ax-window-scan"
+            max_workers=min(12, len(tasks)), thread_name_prefix="ax-window-scan"
         ) as pool:
-            described = list(pool.map(_describe_pooled, apps))
+            described = list(pool.map(_describe_pooled, tasks))
 
         return [window for window in described if window is not None]
 

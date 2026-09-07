@@ -52,7 +52,7 @@ class Tree:
     _extras_cache: tuple[frozenset, list[str]] | None = None
 
     @classmethod
-    def _bundles_with_menu_bar_extras(cls) -> list[str]:
+    def bundles_with_menu_bar_extras(cls) -> list[str]:
         """Bundle ids of running apps that contribute a menu bar extra.
 
         Status icons belong to the application that owns them, not to the
@@ -126,7 +126,7 @@ class Tree:
         bundle_ids: list[str] = []
         system_bundle_ids: list[str] = []
         desktop_only_bundle_ids: list[str] = []
-        extras_only_bundle_ids: list[str] = self._bundles_with_menu_bar_extras()
+        extras_only_bundle_ids: list[str] = self.bundles_with_menu_bar_extras()
         for bundle_id in SYSTEM_UI_BUNDLE_IDS:
             if app := ax.GetRunningApplicationByBundleId(bundle_id):
                 system_bundle_ids.append(app.BundleIdentifier)
@@ -257,18 +257,36 @@ class Tree:
             return self.get_nodes(bundle_id, is_browser, desktop_only, extras_only)
 
     @staticmethod
-    def _modal_sheet(window: ax.Control) -> ax.Control | None:
-        """The sheet currently blocking a window, if there is one.
+    def _visible_windows(app: ax.Control) -> list[ax.Control]:
+        """The application's windows that are not minimized."""
+        return [
+            w for w in app.Windows if not ax.GetAttribute(w.Element, "AXMinimized")
+        ]
 
-        AXModal is not a usable signal here: Chrome leaves it False on the
-        browser window while its file upload picker is open, and the picker is
-        plainly modal. The AXSheet child is what both Chrome and native save
-        panels have in common.
-        """
-        for child in window.GetChildren():
-            if ax.GetAttribute(child.Element, ax.Attribute.Role) == "AXSheet":
-                return child
-        return None
+    def _traverse_windows(
+        self,
+        windows: list[ax.Control],
+        app_name: str,
+        interactive_nodes: list[TreeElementNode],
+        scrollable_nodes: list[ScrollElementNode],
+        dom_informative_nodes: list[TextElementNode],
+        is_browser: bool,
+    ) -> None:
+        for window in windows:
+            window_rect = window.BoundingRectangle
+            self.tree_traversal(
+                window,
+                app_name,
+                interactive_nodes,
+                scrollable_nodes,
+                dom_informative_nodes,
+                main_window_bounding_box=(
+                    BoundingBox.from_bounding_rectangle(window_rect)
+                    if window_rect
+                    else None
+                ),
+                is_browser=is_browser,
+            )
 
     def get_nodes(
         self,
@@ -315,19 +333,33 @@ class Tree:
                     [],
                     is_browser=is_browser,
                 )
+            # A background app can put a window on screen without ever being
+            # activated: Docker Desktop's "Restart Docker Desktop" alert is an
+            # AXDialog owned by an accessory process while another app stays
+            # frontmost, so it is neither the active window nor system UI. Its
+            # menu bar is still skipped -- the frontmost app owns that.
+            self._traverse_windows(
+                self._visible_windows(app),
+                app_name,
+                interactive_nodes,
+                scrollable_nodes,
+                dom_informative_nodes,
+                is_browser,
+            )
             return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
         main_window = app.MainWindow
-        modal_sheet = self._modal_sheet(main_window) if main_window else None
+        dialog = app.ModalDialog
 
         menubar = None
         extras_menubar = None
-        # A sheet blocks the rest of its application: the window behind it and
-        # the app's own menus are inert until it is dismissed. They stay in the
-        # accessibility tree reporting themselves as enabled, so scanning them
-        # yields nodes whose coordinates do nothing when clicked -- a Chrome
-        # upload picker leaves 38 of 80 nodes in that state.
-        if not desktop_only and modal_sheet is None:
+        # A sheet or modal dialog blocks the rest of its application: the
+        # window behind it and the app's own menus are inert until it is
+        # dismissed. They stay in the accessibility tree reporting themselves
+        # as enabled, so scanning them yields nodes whose coordinates do
+        # nothing when clicked -- a Chrome upload picker leaves 38 of 80 nodes
+        # in that state.
+        if not desktop_only and dialog is None:
             if menubar := app.MenuBar:
                 self.tree_traversal(
                     menubar,
@@ -346,33 +378,26 @@ class Tree:
                     [],
                     is_browser=is_browser,
                 )
-        if modal_sheet is not None:
-            sheet_rect = modal_sheet.BoundingRectangle
-            self.tree_traversal(
-                modal_sheet,
+        if dialog is not None:
+            self._traverse_windows(
+                [dialog],
                 app_name,
                 interactive_nodes,
                 scrollable_nodes,
                 dom_informative_nodes,
-                main_window_bounding_box=(
-                    BoundingBox.from_bounding_rectangle(sheet_rect)
-                    if sheet_rect
-                    else None
-                ),
-                is_browser=is_browser,
+                is_browser,
             )
         elif main_window:
             if main_window_rect := main_window.BoundingRectangle:
-                main_window_bounding_box = BoundingBox.from_bounding_rectangle(
-                    main_window_rect
-                )
                 self.tree_traversal(
                     main_window,
                     app_name,
                     interactive_nodes,
                     scrollable_nodes,
                     dom_informative_nodes,
-                    main_window_bounding_box=main_window_bounding_box,
+                    main_window_bounding_box=BoundingBox.from_bounding_rectangle(
+                        main_window_rect
+                    ),
                     is_browser=is_browser,
                 )
         else:
@@ -386,22 +411,14 @@ class Tree:
                 if not ax.GetAttribute(w.Element, "AXMinimized")
             ]
             if visible_windows:
-                for window in visible_windows:
-                    window_rect = window.BoundingRectangle
-                    window_bbox = (
-                        BoundingBox.from_bounding_rectangle(window_rect)
-                        if window_rect
-                        else None
-                    )
-                    self.tree_traversal(
-                        window,
-                        app_name,
-                        interactive_nodes,
-                        scrollable_nodes,
-                        dom_informative_nodes,
-                        main_window_bounding_box=window_bbox,
-                        is_browser=is_browser,
-                    )
+                self._traverse_windows(
+                    visible_windows,
+                    app_name,
+                    interactive_nodes,
+                    scrollable_nodes,
+                    dom_informative_nodes,
+                    is_browser,
+                )
             elif not all_windows:
                 # Some windowless apps (e.g. Spotlight) report their menu bar
                 # elements as top-level children too. Those were already fully
