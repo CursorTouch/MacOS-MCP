@@ -52,7 +52,6 @@ from Quartz import (
     kCGNullWindowID,
     CGRectInfinite,
     kCGWindowImageDefault,
-    kCGWindowListOptionAll,
 )
 from Quartz.CoreGraphics import (
     CGImageGetWidth,
@@ -99,6 +98,7 @@ from .enums import (
     KeyCode,
     KEY_NAME_TO_CODE,
     MODIFIER_KEY_MAP,
+    WindowLevel,
 )
 
 logger = logging.getLogger(__name__)
@@ -1673,18 +1673,68 @@ def _type_unicode_char(char: str) -> None:
 # =============================================================================
 
 
-def GetWindowList(on_screen_only: bool = True) -> list["ApplicationControl"]:
+@dataclass(frozen=True)
+class OnScreenWindow:
+    """One entry of the window server's on-screen list.
+
+    This is the window server's own view, so it covers every process at
+    once -- accessory apps included -- without opening an accessibility
+    connection to any of them.
     """
-    Get list of window info dictionaries from the window server.
-    Returns raw CGWindowListCopyWindowInfo results.
+
+    window_id: int
+    pid: int
+    owner_name: str
+    title: str
+    # kCGWindowLayer. See WindowLevel; this is the only place stacking across
+    # applications is visible -- accessibility does not report it.
+    layer: int
+    # Position in the front-to-back list; lower is nearer the user.
+    z_index: int
+    bounds: Rect
+
+    @property
+    def is_application(self) -> bool:
+        """An application's window, as opposed to the desktop below or the
+        Dock, menu bar and status items above."""
+        return WindowLevel.Normal <= self.layer < WindowLevel.Dock
+
+
+def GetOnScreenWindows() -> list[OnScreenWindow]:
+    """Every on-screen window known to the window server, front to back.
+
+    Desktop elements (wallpaper, desktop icons) are excluded. Fully
+    transparent windows are skipped: they are invisible to the user and only
+    exist as event catchers or drag proxies.
     """
-    options = (
-        kCGWindowListOptionOnScreenOnly if on_screen_only else kCGWindowListOptionAll
+    window_list = CGWindowListCopyWindowInfo(
+        kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+        kCGNullWindowID,
     )
-    if on_screen_only:
-        options |= kCGWindowListExcludeDesktopElements
-    window_list = CGWindowListCopyWindowInfo(options, kCGNullWindowID)
-    return list(window_list) if window_list else []
+    windows: list[OnScreenWindow] = []
+    for info in window_list or []:
+        if not info.get(Quartz.kCGWindowAlpha, 1.0):
+            continue
+        bounds = info.get(Quartz.kCGWindowBounds) or {}
+        left = float(bounds.get("X", 0))
+        top = float(bounds.get("Y", 0))
+        windows.append(
+            OnScreenWindow(
+                window_id=int(info.get(Quartz.kCGWindowNumber, 0)),
+                pid=int(info.get(Quartz.kCGWindowOwnerPID, 0)),
+                owner_name=str(info.get(Quartz.kCGWindowOwnerName) or ""),
+                title=str(info.get(Quartz.kCGWindowName) or ""),
+                layer=int(info.get(Quartz.kCGWindowLayer, 0)),
+                z_index=len(windows),
+                bounds=Rect(
+                    left=left,
+                    top=top,
+                    right=left + float(bounds.get("Width", 0)),
+                    bottom=top + float(bounds.get("Height", 0)),
+                ),
+            )
+        )
+    return windows
 
 
 def GetForegroundWindowPID() -> Optional[int]:
@@ -2729,8 +2779,15 @@ def GetRunningApplicationByBundleId(bundle_id: str) -> Optional["ApplicationCont
     """
     from .controls import ApplicationControl
 
-    for app in GetRunningApplicationsRaw():
-        bid = app.bundleIdentifier()
-        if bid and str(bid) == bundle_id:
-            return ApplicationControl(pid=app.processIdentifier())
-    return None
+    # Several processes can share a bundle id -- Chrome keeps a Prohibited
+    # background twin alongside the browser -- so prefer the one that can own
+    # windows: Regular before Accessory before Prohibited.
+    matches = [
+        app
+        for app in GetRunningApplicationsRaw()
+        if (bid := app.bundleIdentifier()) and str(bid) == bundle_id
+    ]
+    if not matches:
+        return None
+    app = min(matches, key=lambda app: app.activationPolicy())
+    return ApplicationControl(pid=app.processIdentifier())

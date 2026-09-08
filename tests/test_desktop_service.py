@@ -6,7 +6,7 @@ import time
 import pytest
 from unittest.mock import AsyncMock, Mock, MagicMock, patch, call
 from macos_mcp.desktop.service import Desktop
-from macos_mcp.desktop.views import Window, Status, DesktopState, Size
+from macos_mcp.desktop.views import Dialog, Window, Status, DesktopState, Size
 from macos_mcp.tree.views import BoundingBox, TreeState, Center
 from macos_mcp.tree.service import Tree
 
@@ -586,7 +586,7 @@ class TestDesktopAsyncAPI:
             "macos_mcp.desktop.service.ax.GetRunningApplications",
             return_value=[app],
         )
-        mocker.patch.object(Tree, "bundles_with_menu_bar_extras", return_value=[])
+        mocker.patch("macos_mcp.desktop.service.ax.GetDialogs", return_value=[])
         pool = mocker.patch("macos_mcp.desktop.service.objc.autorelease_pool")
         pool_context = MagicMock()
         pool.return_value = pool_context
@@ -609,52 +609,58 @@ class TestDesktopAsyncAPI:
         regular.PID = 123
         regular.Status = Status.WINDOWLESS.value
 
-        heading = MagicMock()
-        dialog = MagicMock()
-        dialog.Title = ""
-        dialog.GetChildren.return_value = [heading]
-
         docker = MagicMock()
         docker.BundleIdentifier = "com.electron.dockerdesktop"
         docker.Name = "Docker Desktop"
         docker.PID = 456
         docker.Status = Status.VISIBLE.value
         docker.MainWindow = None
-        docker.ModalDialog = dialog
 
-        idle = MagicMock()
-        idle.BundleIdentifier = "com.example.ollama"
-        idle.Name = "Ollama"
-        idle.PID = 789
-        idle.Status = Status.WINDOWLESS.value
+        dialog = MagicMock()
+        dialog.app = docker
+        dialog.title = "Restart Docker Desktop"
+        dialog.reachable = True
 
         mocker.patch(
             "macos_mcp.desktop.service.ax.GetRunningApplications",
             return_value=[regular],
         )
-        mocker.patch.object(
-            Tree,
-            "bundles_with_menu_bar_extras",
-            return_value=[docker.BundleIdentifier, idle.BundleIdentifier],
-        )
-        mocker.patch(
-            "macos_mcp.desktop.service.ax.GetRunningApplicationByBundleId",
-            side_effect=lambda bid: {
-                docker.BundleIdentifier: docker,
-                idle.BundleIdentifier: idle,
-            }[bid],
-        )
-        mocker.patch(
-            "macos_mcp.desktop.service.ax.GetMultipleAttributeValues",
-            return_value={"AXRole": "AXStaticText", "AXValue": "Restart Docker Desktop"},
-        )
+        mocker.patch("macos_mcp.desktop.service.ax.GetDialogs", return_value=[dialog])
 
         windows = Desktop().get_windows()
 
         assert [(w.name, w.dialog) for w in windows] == [
             ("Example", None),
-            ("Docker Desktop", "Restart Docker Desktop"),
+            ("Docker Desktop", Dialog(title="Restart Docker Desktop", reachable=True)),
         ]
+
+    def test_get_windows_lists_finder_only_while_its_dialog_is_up(self, mocker):
+        """Finder is excluded as noise, except when it is asking the user
+        something -- and then the list says whether the dialog is reachable."""
+        finder = MagicMock()
+        finder.BundleIdentifier = "com.apple.finder"
+        finder.Name = "Finder"
+        finder.PID = 597
+        finder.Status = Status.VISIBLE.value
+        finder.MainWindow = None
+
+        dialog = MagicMock()
+        dialog.app = finder
+        dialog.title = "Empty Bin"
+        dialog.reachable = False
+
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.GetRunningApplications", return_value=[finder]
+        )
+        get_dialogs = mocker.patch("macos_mcp.desktop.service.ax.GetDialogs")
+
+        get_dialogs.return_value = []
+        assert Desktop().get_windows() == []
+
+        get_dialogs.return_value = [dialog]
+        windows = Desktop().get_windows()
+        assert [w.dialog for w in windows] == [Dialog(title="Empty Bin", reachable=False)]
+        assert "behind other windows" in windows[0].to_string()
     async def test_async_methods_do_not_block_the_event_loop(self, mocker):
         """A slow sync call must leave the loop free to run other tasks.
 

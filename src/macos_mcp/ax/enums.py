@@ -1085,3 +1085,28 @@ ActivationPolicyNames = {
     1: "Accessory",
     2: "Prohibited",
 }
+
+
+# =============================================================================
+# Window Levels
+# =============================================================================
+
+
+class WindowLevel:
+    """
+    Window server stacking levels, as reported by kCGWindowLayer.
+    Refer: CoreGraphics/CGWindowLevel.h, AppKit NSWindow.Level
+
+    Stacking of levels takes precedence over stacking within a level: the
+    bottom window of a level still covers the top window of the level below,
+    whichever application is active.
+    """
+
+    Normal = 0  # Ordinary windows
+    Floating = 3  # Floating palettes
+    ModalPanel = 8  # Alerts while their application is active; some alerts always
+    Utility = 19
+    Dock = 20
+    MainMenu = 24
+    Status = 25  # Menu bar extras
+    PopUpMenu = 101

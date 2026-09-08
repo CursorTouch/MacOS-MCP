@@ -25,6 +25,24 @@ class Size:
 
 
 @dataclass
+class Dialog:
+    """The sheet or modal dialog currently blocking an application."""
+
+    title: str
+    # False when the dialog sits behind other applications' windows: an
+    # ordinary alert drops to the normal window level as soon as its app is
+    # no longer active. The app must be switched to before the dialog's
+    # controls can be used.
+    reachable: bool
+
+    def to_string(self) -> str:
+        line = f'dialog: "{self.title}"'
+        if not self.reachable:
+            line += " (behind other windows; switch to the app to reach it)"
+        return line
+
+
+@dataclass
 class Window:
     name: str
     is_browser: bool
@@ -32,13 +50,12 @@ class Window:
     bounding_box: BoundingBox
     pid: int
     bundle_id: str
-    # Title of the sheet or modal dialog currently blocking the app, if any.
-    dialog: str | None = None
+    dialog: Dialog | None = None
 
     def to_string(self) -> str:
         line = f"{self.name} ({self.bundle_id}) - {self.status.value}"
         if self.dialog:
-            line += f' - dialog: "{self.dialog}"'
+            line += f" - {self.dialog.to_string()}"
         return line
 
 

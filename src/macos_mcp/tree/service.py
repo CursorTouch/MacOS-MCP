@@ -16,6 +16,7 @@ from macos_mcp.tree.views import (
 )
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import deque
+from dataclasses import dataclass
 from macos_mcp.desktop.config import BROWSER_BUNDLE_IDS, SYSTEM_UI_BUNDLE_IDS
 from macos_mcp.desktop.views import Window
 import macos_mcp.ax as ax
@@ -31,6 +32,22 @@ THREAD_MAX_RETRIES = 3
 # entire rest of the snapshot. Raise it for deeper coverage of a single field;
 # set it to 0 to turn word nodes off entirely.
 MAX_WORD_NODES_PER_ELEMENT = 200
+
+
+@dataclass
+class _Scan:
+    """How much of one application to walk.
+
+    With no flag set the whole application is scanned: menus, main window
+    or dialog. Each flag narrows that to one part; an app can carry several,
+    as Docker Desktop does when its status icon and an alert are both up.
+    """
+
+    bundle_id: str
+    is_browser: bool
+    desktop_only: bool = False
+    extras_only: bool = False
+    dialog_only: bool = False
 
 
 class Tree:
@@ -146,12 +163,27 @@ class Tree:
             if is_windowless:
                 desktop_only_bundle_ids.append(FINDER_BUNDLE_ID)
 
+        # A background app's dialog is scanned only while the user can reach
+        # it: Docker Desktop's alert floats over every app, whereas Finder's
+        # "Empty Bin" drops behind the active app's windows the moment Finder
+        # is deactivated. The latter is reported in the window list instead,
+        # since its coordinates land on whatever covers it.
+        dialog_only_bundle_ids = [
+            bundle_id
+            for dialog in ax.GetDialogs()
+            if dialog.reachable
+            and not dialog.frontmost
+            and (bundle_id := dialog.app.BundleIdentifier)
+            and bundle_id not in bundle_ids
+        ]
+
         interactive_nodes, scrollable_nodes, dom_informative_nodes = (
             self.get_window_wise_nodes(
                 bundle_ids=bundle_ids,
                 system_bundle_ids=system_bundle_ids,
                 desktop_only_bundle_ids=desktop_only_bundle_ids,
                 extras_only_bundle_ids=extras_only_bundle_ids,
+                dialog_only_bundle_ids=dialog_only_bundle_ids,
             )
         )
 
@@ -168,38 +200,39 @@ class Tree:
         system_bundle_ids: list[str] | None = None,
         desktop_only_bundle_ids: list[str] | None = None,
         extras_only_bundle_ids: list[str] | None = None,
+        dialog_only_bundle_ids: list[str] | None = None,
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         interactive_nodes: list[TreeElementNode] = []
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
 
-        if system_bundle_ids is None:
-            system_bundle_ids = []
-        if desktop_only_bundle_ids is None:
-            desktop_only_bundle_ids = []
-        if extras_only_bundle_ids is None:
-            extras_only_bundle_ids = []
+        # An app scanned in full needs no narrowing; otherwise each list adds
+        # one part of the app to walk, and an app named in several lists gets
+        # one task carrying every flag.
+        scans: dict[str, _Scan] = {
+            bundle_id: _Scan(bundle_id, bundle_id in BROWSER_BUNDLE_IDS) for bundle_id in bundle_ids
+        }
 
-        task_inputs: list[tuple[str, bool, bool, bool]] = []
-        for bundle_id in bundle_ids:
-            is_browser = bundle_id in BROWSER_BUNDLE_IDS
-            task_inputs.append((bundle_id, is_browser, False, False))
-        for bundle_id in desktop_only_bundle_ids:
-            if bundle_id not in bundle_ids:
-                is_browser = bundle_id in BROWSER_BUNDLE_IDS
-                task_inputs.append((bundle_id, is_browser, True, False))
-        for bundle_id in extras_only_bundle_ids:
-            if bundle_id not in bundle_ids:
-                task_inputs.append((bundle_id, False, False, True))
+        def _narrow(bundle_id: str, **flag: bool) -> None:
+            if bundle_id in bundle_ids:
+                return
+            scan = scans.setdefault(bundle_id, _Scan(bundle_id, bundle_id in BROWSER_BUNDLE_IDS))
+            for name, value in flag.items():
+                setattr(scan, name, value)
+
+        for bundle_id in desktop_only_bundle_ids or []:
+            _narrow(bundle_id, desktop_only=True)
+        for bundle_id in extras_only_bundle_ids or []:
+            _narrow(bundle_id, extras_only=True)
+        for bundle_id in dialog_only_bundle_ids or []:
+            _narrow(bundle_id, dialog_only=True)
 
         executor = self._executor
-        retry_counts: dict[str, int] = {bid: 0 for bid, _, __, ___ in task_inputs}
+        retry_counts: dict[str, int] = {bundle_id: 0 for bundle_id in scans}
         future_to_bundle_id: dict = {}
-        for bid, is_browser, desktop_only, extras_only in task_inputs:
-            future = executor.submit(
-                self._get_nodes_pooled, bid, is_browser, desktop_only, extras_only
-            )
-            future_to_bundle_id[future] = bid
+        for scan in scans.values():
+            future = executor.submit(self._get_nodes_pooled, scan)
+            future_to_bundle_id[future] = scan.bundle_id
 
         while future_to_bundle_id:
             for future in as_completed(list(future_to_bundle_id)):
@@ -220,13 +253,7 @@ class Tree:
                         e,
                     )
                     if retry_counts[bundle_id] < THREAD_MAX_RETRIES:
-                        task = next(
-                            (t for t in task_inputs if t[0] == bundle_id),
-                            (bundle_id, False, False, False),
-                        )
-                        new_future = executor.submit(
-                            self._get_nodes_pooled, bundle_id, task[1], task[2], task[3]
-                        )
+                        new_future = executor.submit(self._get_nodes_pooled, scans[bundle_id])
                         future_to_bundle_id[new_future] = bundle_id
                     else:
                         logger.error(
@@ -239,11 +266,7 @@ class Tree:
         return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
     def _get_nodes_pooled(
-        self,
-        bundle_id: str,
-        is_browser: bool,
-        desktop_only: bool = False,
-        extras_only: bool = False,
+        self, scan: _Scan
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         """Run get_nodes inside an autorelease pool on the worker thread.
 
@@ -254,14 +277,13 @@ class Tree:
         lifetime of these long-lived worker threads (a steady memory leak).
         """
         with objc.autorelease_pool():
-            return self.get_nodes(bundle_id, is_browser, desktop_only, extras_only)
-
-    @staticmethod
-    def _visible_windows(app: ax.Control) -> list[ax.Control]:
-        """The application's windows that are not minimized."""
-        return [
-            w for w in app.Windows if not ax.GetAttribute(w.Element, "AXMinimized")
-        ]
+            return self.get_nodes(
+                scan.bundle_id,
+                scan.is_browser,
+                scan.desktop_only,
+                scan.extras_only,
+                scan.dialog_only,
+            )
 
     def _traverse_windows(
         self,
@@ -294,6 +316,7 @@ class Tree:
         is_browser: bool,
         desktop_only: bool = False,
         extras_only: bool = False,
+        dialog_only: bool = False,
     ) -> tuple[list[TreeElementNode], list[ScrollElementNode], list[TextElementNode]]:
         """
         Get interactive and scrollable nodes for an app by bundle_id.
@@ -304,11 +327,17 @@ class Tree:
             is_browser: Whether the app is a browser.
             desktop_only: When True, skip menu bar scanning (used for Finder desktop
                           items when another app owns the menu bar).
-            extras_only: When True, scan only the app's menu bar extras and skip
-                         its menus and windows. Used for background apps that
+            extras_only: When True, scan the app's menu bar extras and skip its
+                         menus and windows. Used for background apps that
                          contribute a status icon but whose own UI is not on
                          screen -- scanning their full tree would cost far more
                          than the one node they provide.
+            dialog_only: When True, scan the sheet or modal dialog the app has
+                         on screen and nothing else. Used for a background app
+                         whose alert floats over the active app -- Docker
+                         Desktop's restart prompt -- so it is neither the
+                         active window nor system UI. Its menu bar is still
+                         skipped: the frontmost app owns that.
         """
         app = ax.GetRunningApplicationByBundleId(bundle_id)
         if not app:
@@ -323,8 +352,8 @@ class Tree:
         scrollable_nodes: list[ScrollElementNode] = []
         dom_informative_nodes: list[TextElementNode] = []
 
-        if extras_only:
-            if extras := app.ExtrasMenuBar:
+        if extras_only or dialog_only:
+            if extras_only and (extras := app.ExtrasMenuBar):
                 self.tree_traversal(
                     extras,
                     app_name,
@@ -333,23 +362,19 @@ class Tree:
                     [],
                     is_browser=is_browser,
                 )
-            # A background app can put a window on screen without ever being
-            # activated: Docker Desktop's "Restart Docker Desktop" alert is an
-            # AXDialog owned by an accessory process while another app stays
-            # frontmost, so it is neither the active window nor system UI. Its
-            # menu bar is still skipped -- the frontmost app owns that.
-            self._traverse_windows(
-                self._visible_windows(app),
-                app_name,
-                interactive_nodes,
-                scrollable_nodes,
-                dom_informative_nodes,
-                is_browser,
-            )
+            if dialog_only and (dialog := app.Dialog):
+                self._traverse_windows(
+                    [dialog.window],
+                    app_name,
+                    interactive_nodes,
+                    scrollable_nodes,
+                    dom_informative_nodes,
+                    is_browser,
+                )
             return interactive_nodes, scrollable_nodes, dom_informative_nodes
 
         main_window = app.MainWindow
-        dialog = app.ModalDialog
+        dialog = app.Dialog
 
         menubar = None
         extras_menubar = None
@@ -380,7 +405,7 @@ class Tree:
                 )
         if dialog is not None:
             self._traverse_windows(
-                [dialog],
+                [dialog.window],
                 app_name,
                 interactive_nodes,
                 scrollable_nodes,

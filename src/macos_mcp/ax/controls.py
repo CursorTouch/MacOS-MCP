@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 import logging
+from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Union
 
 from ApplicationServices import (
@@ -23,12 +24,16 @@ from .enums import (
     Attribute,
     Action,
     ActivationPolicyNames,
+    WindowLevel,
 )
 
 from .core import (
     Rect,
     Point,
     Size,
+    OnScreenWindow,
+    GetOnScreenWindows,
+    SetMessagingTimeout,
     GetAttribute,
     GetMultipleAttributeValues,
     SetAttribute,
@@ -1468,12 +1473,12 @@ class ApplicationControl(Control):
         return []
 
     @property
-    def ModalDialog(self) -> Optional[Control]:
-        """The sheet or modal window currently blocking this application.
+    def Dialog(self) -> Optional[DialogInfo]:
+        """The sheet or modal dialog currently blocking this application.
 
-        Two shapes exist. A sheet hangs off the main window (native save
-        panels, Chrome's upload picker). A standalone AXModal window is its
-        own AXWindow with subrole AXDialog -- an NSAlert run modally, Finder's
+        Two shapes exist. A sheet hangs off a window (native save panels,
+        Chrome's upload picker). A standalone AXModal window is its own
+        AXWindow with subrole AXDialog -- an NSAlert run modally, Finder's
         `display dialog`, Electron's showMessageBox without a parent, Docker
         Desktop's restart alert. The latter is never the main window, because
         panels cannot become main, so a caller rooted at MainWindow walks the
@@ -1483,15 +1488,35 @@ class ApplicationControl(Control):
         it and its menus -- is inert even though it still reports itself as
         enabled.
         """
-        main_window = self.MainWindow
-        if main_window and (sheet := main_window.Sheet):
-            return sheet
-        for window in self.Windows:
-            attrs = GetMultipleAttributeValues(
-                window.Element, [Attribute.Modal, Attribute.Minimized]
+        return self._dialog(GetOnScreenWindows())
+
+    def _dialog(self, screen: List[OnScreenWindow]) -> Optional[DialogInfo]:
+        """Find the dialog by walking this app's on-screen windows front to back.
+
+        The window server's list is the only place stacking is visible:
+        accessibility reports the same AXModal/AXDialog for an alert that
+        floats over every application and one buried behind them. Each
+        on-screen entry is matched to its AXWindow by frame -- the public
+        API offers no direct link.
+        """
+        pid = self.PID
+        own = [entry for entry in screen if entry.pid == pid and entry.is_application]
+        if not own:
+            return None
+        frontmost = _frontmost_pid(screen) == pid
+        windows = [(window, window.BoundingRectangle) for window in self.Windows]
+        for entry in own:
+            window = next(
+                (w for w, rect in windows if rect and _same_frame(rect, entry.bounds)),
+                None,
             )
-            if attrs.get(Attribute.Modal) and not attrs.get(Attribute.Minimized):
-                return window
+            if window is None:
+                continue
+            floating = entry.layer > WindowLevel.Normal
+            if window.IsModal:
+                return DialogInfo(self, window, floating=floating, frontmost=frontmost)
+            if sheet := window.Sheet:
+                return DialogInfo(self, sheet, floating=floating, frontmost=frontmost)
         return None
 
     @property
@@ -1837,6 +1862,25 @@ class WindowControl(Control):
         return SetAttribute(self.Element, Attribute.Position, (x, y))
 
     @property
+    def IsModal(self) -> bool:
+        """Whether this window is modal (AXModal).
+
+        True for an alert or dialog run modally: the rest of its application
+        is inert until it is dismissed. Says nothing about stacking -- see
+        DialogInfo.floating for that.
+        """
+        return GetAttribute(self.Element, Attribute.Modal) is True
+
+    @property
+    def IsMain(self) -> bool:
+        """Whether this is the application's main document window (AXMain).
+
+        Never True for an alert or dialog: panels cannot become main, so an
+        application's MainWindow is always the window *behind* its dialog.
+        """
+        return GetAttribute(self.Element, Attribute.Main) is True
+
+    @property
     def Sheet(self) -> Optional[Control]:
         """The sheet attached to this window, if one is open.
 
@@ -1865,6 +1909,94 @@ class WindowControl(Control):
         if btn:
             return CreateControl(btn)
         return None
+
+
+@dataclass(frozen=True)
+class DialogInfo:
+    """A sheet or modal dialog and how it sits among the other applications.
+
+    `floating` and `frontmost` are the two bits that decide whether the user
+    can see and click the dialog right now. AppKit keeps an alert at the
+    modal-panel level only while its application is active and drops it to
+    the normal level otherwise, where other applications' windows bury it.
+    Some alerts -- Docker Desktop's, raised by an accessory app -- stay at
+    the modal-panel level whichever application is active.
+    """
+
+    app: ApplicationControl
+    # The AXSheet or the modal AXWindow.
+    window: Control
+    # Stacked above every normal window, whichever application is active.
+    floating: bool
+    # The owning application is the active one.
+    frontmost: bool
+
+    @property
+    def title(self) -> str:
+        """The dialog's title, or its heading when it has none.
+
+        Alert panels carry no AXTitle -- Docker's restart prompt and Finder's
+        `display dialog` both report '' -- so fall back to the first line of
+        text they show.
+        """
+        if title := self.window.Title:
+            return title
+        for child in self.window.GetChildren():
+            attrs = GetMultipleAttributeValues(child.Element, [Attribute.Role, Attribute.Value])
+            if attrs.get(Attribute.Role) == Role.StaticText:
+                if text := str(attrs.get(Attribute.Value) or "").strip():
+                    return text
+        return "Dialog"
+
+    @property
+    def reachable(self) -> bool:
+        """Whether the dialog is in front of the user right now.
+
+        False means it sits behind other applications' windows: its
+        application must be activated before its controls can be used.
+        """
+        return self.floating or self.frontmost
+
+
+def _same_frame(rect: Rect, bounds: Rect) -> bool:
+    """Whether an AXFrame and a window server bounds describe one window."""
+    return (
+        abs(rect.left - bounds.left) <= 1
+        and abs(rect.top - bounds.top) <= 1
+        and abs(rect.width - bounds.width) <= 1
+        and abs(rect.height - bounds.height) <= 1
+    )
+
+
+def _frontmost_pid(screen: List[OnScreenWindow]) -> Optional[int]:
+    """The active application: owner of the front window at the normal level."""
+    for entry in screen:
+        if entry.layer == WindowLevel.Normal:
+            return entry.pid
+    return None
+
+
+def GetDialogs() -> List[DialogInfo]:
+    """Every sheet or modal dialog on screen, front to back, across all applications.
+
+    Driven by the window server's list rather than the running-application
+    list, so an accessory app that raises an alert without ever being
+    activated is found the same way as a regular one. Only processes that
+    own an on-screen window are probed over accessibility.
+    """
+    screen = GetOnScreenWindows()
+    dialogs: List[DialogInfo] = []
+    seen: set[int] = set()
+    for entry in screen:
+        if not entry.is_application or entry.pid in seen:
+            continue
+        seen.add(entry.pid)
+        app = ApplicationControl(pid=entry.pid)
+        # An unresponsive process must not stall the whole scan.
+        SetMessagingTimeout(app.Element, 0.5)
+        if dialog := app._dialog(screen):
+            dialogs.append(dialog)
+    return dialogs
 
 
 class ButtonControl(Control):

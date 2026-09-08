@@ -74,6 +74,7 @@ from .enums import (
     TextAttribute,
     ActivationPolicy,
     ActivationPolicyNames,
+    WindowLevel,
 )
 
 # Core - Functions
@@ -82,6 +83,7 @@ from .core import (
     Rect,
     Point,
     Size,
+    OnScreenWindow,
     # AX client
     _AXClient,
     GetRootControl,
@@ -142,6 +144,7 @@ from .core import (
     HotKey,
     TypeText,
     # Application & Window (high-level, returns Control objects)
+    GetOnScreenWindows,
     GetForegroundWindowPID,
     GetFrontmostApplication,
     GetForegroundControl,
@@ -218,6 +221,8 @@ from .controls import (
     DockItemControl,
     CellControl,
     RowControl,
+    DialogInfo,
+    GetDialogs,
 )
 
 # Patterns - Interaction patterns
@@ -272,10 +277,12 @@ __all__ = [
     "TextAttribute",
     "ActivationPolicy",
     "ActivationPolicyNames",
+    "WindowLevel",
     # Core
     "Rect",
     "Point",
     "Size",
+    "OnScreenWindow",
     "_AXClient",
     "GetRootControl",
     "ControlFromPID",
@@ -329,6 +336,7 @@ __all__ = [
     "KeyPress",
     "HotKey",
     "TypeText",
+    "GetOnScreenWindows",
     "GetForegroundWindowPID",
     "GetFrontmostApplication",
     "GetForegroundControl",
@@ -395,6 +403,8 @@ __all__ = [
     "DockItemControl",
     "CellControl",
     "RowControl",
+    "DialogInfo",
+    "GetDialogs",
     # Patterns
     "InvokePattern",
     "ValuePattern",
