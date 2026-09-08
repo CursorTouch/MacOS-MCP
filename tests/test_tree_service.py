@@ -299,9 +299,9 @@ class TestTreeGetNodes:
 
 @pytest.mark.unit
 class TestTreeModalDialog:
-    """A sheet or modal dialog blocks its application, so only the dialog is
-    worth scanning. Detection lives in ApplicationControl.Dialog; the tree
-    just asks."""
+    """A sheet or modal dialog blocks the window behind it, so the dialog is
+    scanned in its place; the menus stay. Detection lives in
+    ApplicationControl.Dialog; the tree just asks."""
 
     def _mock_app(self, mocker, dialog_window):
         main_window = MagicMock()
@@ -327,16 +327,16 @@ class TestTreeModalDialog:
         mocker.patch("macos_mcp.tree.service.BoundingBox")
         return app, main_window
 
-    def test_get_nodes_scans_only_the_dialog(self, mocker):
-        """With a dialog up, the window behind it and the menus are skipped."""
+    def test_get_nodes_scans_menus_and_the_dialog(self, mocker):
+        """With a dialog up, the window behind it is skipped; the menus are not."""
         dialog = MagicMock()
-        _, _ = self._mock_app(mocker, dialog)
+        app, _ = self._mock_app(mocker, dialog)
         mock_traversal = mocker.patch.object(Tree, "tree_traversal")
 
         Tree().get_nodes("com.test.app", is_browser=False)
 
         roots = [c[0][0] for c in mock_traversal.call_args_list]
-        assert roots == [dialog]
+        assert roots == [app.MenuBar, app.ExtrasMenuBar, dialog]
 
     def test_get_nodes_without_dialog_scans_menus_and_window(self, mocker):
         app, main_window = self._mock_app(mocker, None)

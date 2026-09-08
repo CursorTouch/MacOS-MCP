@@ -378,13 +378,10 @@ class Tree:
 
         menubar = None
         extras_menubar = None
-        # A sheet or modal dialog blocks the rest of its application: the
-        # window behind it and the app's own menus are inert until it is
-        # dismissed. They stay in the accessibility tree reporting themselves
-        # as enabled, so scanning them yields nodes whose coordinates do
-        # nothing when clicked -- a Chrome upload picker leaves 38 of 80 nodes
-        # in that state.
-        if not desktop_only and dialog is None:
+        # The menu bar is scanned even while a dialog is up: AppKit keeps
+        # menu items that work when modal live, and the agent needs the menus
+        # to see what the app offers.
+        if not desktop_only:
             if menubar := app.MenuBar:
                 self.tree_traversal(
                     menubar,
@@ -403,6 +400,11 @@ class Tree:
                     [],
                     is_browser=is_browser,
                 )
+        # A sheet or modal dialog blocks the window behind it until it is
+        # dismissed. That window stays in the accessibility tree reporting
+        # itself as enabled, so scanning it yields nodes whose coordinates do
+        # nothing when clicked -- a Chrome upload picker leaves 38 of 80 nodes
+        # in that state. Only the dialog is walked.
         if dialog is not None:
             self._traverse_windows(
                 [dialog.window],

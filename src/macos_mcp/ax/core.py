@@ -2779,9 +2779,13 @@ def GetRunningApplicationByBundleId(bundle_id: str) -> Optional["ApplicationCont
     """
     from .controls import ApplicationControl
 
-    # Several processes can share a bundle id -- Chrome keeps a Prohibited
-    # background twin alongside the browser -- so prefer the one that can own
-    # windows: Regular before Accessory before Prohibited.
+    # Several processes can share a bundle id -- a headless Chrome launched
+    # with --no-startup-window runs alongside the browser -- so prefer the one
+    # the user can see: on-screen windows first, then the activation policy
+    # (Regular before Accessory before Prohibited), which a headless instance
+    # can change at any time. The wrong pick is not harmless: every Cocoa
+    # process has a menu bar, so the headless twin answers a scan with menus
+    # and nothing else.
     matches = [
         app
         for app in GetRunningApplicationsRaw()
@@ -2789,5 +2793,9 @@ def GetRunningApplicationByBundleId(bundle_id: str) -> Optional["ApplicationCont
     ]
     if not matches:
         return None
-    app = min(matches, key=lambda app: app.activationPolicy())
-    return ApplicationControl(pid=app.processIdentifier())
+    if len(matches) > 1:
+        on_screen = {w.pid for w in GetOnScreenWindows() if w.is_application}
+        matches.sort(
+            key=lambda app: (app.processIdentifier() not in on_screen, app.activationPolicy())
+        )
+    return ApplicationControl(pid=matches[0].processIdentifier())
