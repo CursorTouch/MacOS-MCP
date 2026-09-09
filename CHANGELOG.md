@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Importing `macos_mcp.tree.service` before anything had imported `macos_mcp.desktop` raised `ImportError: cannot import name 'Tree' from partially initialized module`. The tree reads `desktop.config` and `desktop.views`, and `desktop/__init__.py` re-exported `Desktop`, so touching any desktop submodule ran `desktop/service.py`, which imports the tree — still half-initialised. The shipped server was unaffected because it reaches the desktop first, and the test suite only escaped it because `tests/conftest.py` happens to import `macos_mcp.desktop.views` on the line above `macos_mcp.tree.views`; a test module or embedding caller that reached the tree first hit it. That re-export had no consumers, so `desktop/__init__.py` is now empty, as `tree/__init__.py` already was, leaving `desktop.config` and `desktop.views` importable as the leaf data modules they are. Import `Desktop` from `macos_mcp.desktop.service`
+
 ## [0.4.6] - 2026-09-08
 
 ### Fixed
