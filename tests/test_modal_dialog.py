@@ -1,18 +1,22 @@
 """Tests for dialog detection on ApplicationControl / WindowControl.
 
-A dialog blocks its application in one of two shapes:
+A dialog blocks its application in one of three shapes:
 
     sheet   -- an AXSheet child of a window (save panels, Chrome's upload
                picker). AXModal is False on the window behind it.
     modal   -- a standalone AXWindow with AXModal True and AXMain False
                (NSAlert run modally, Finder's `display dialog`, Docker
                Desktop's restart alert). It is never MainWindow.
+    system  -- a UserNotificationCenter prompt ("Allow 'Google Chrome' to
+               find devices on local networks?"). AXModal is False; the
+               subrole AXSystemDialog is what identifies it.
 
-Accessibility reports both the same whether the dialog floats over every
+Accessibility reports these the same whether the dialog floats over every
 application or is buried behind them; only the window server's layer tells.
-Confirmed live against three alerts open at once:
+Confirmed live against alerts open at once:
 
     Docker Desktop (accessory)  layer 8 whichever app is active  -> floating
+    UserNotificationCenter      layer 8 whichever app is active  -> floating
     Finder "Empty Bin"          layer 8 while Finder is active, else 0
     Chrome "Leave site?"        layer 8 while Chrome is active, else 0
 """
@@ -47,10 +51,11 @@ def _on_screen(pid, layer, z_index, bounds, name=""):
     )
 
 
-def _window(bounds, modal=False, sheet=None):
+def _window(bounds, dialog=False, sheet=None):
     window = MagicMock(spec=WindowControl)
     window.BoundingRectangle = bounds
-    window.IsModal = modal
+    # What _dialog keys on: AXModal, or the AXSystemDialog subrole.
+    window.IsDialog = dialog
     window.Sheet = sheet
     return window
 
@@ -85,13 +90,27 @@ class TestWindowSheet:
 
 @pytest.mark.unit
 class TestWindowModal:
+    def _window(self, mocker, modal=None, subrole=""):
+        values = {Attribute.Modal: modal, Attribute.Subrole: subrole}
+        mocker.patch.object(controls, "GetAttribute", side_effect=lambda el, attr: values.get(attr))
+        return WindowControl(element=_element())
+
     def test_is_modal_reads_axmodal(self, mocker):
-        mocker.patch.object(controls, "GetAttribute", return_value=True)
-        assert WindowControl(element=_element()).IsModal is True
+        assert self._window(mocker, modal=True).IsModal is True
 
     def test_is_modal_false_when_unsupported(self, mocker):
-        mocker.patch.object(controls, "GetAttribute", return_value=None)
-        assert WindowControl(element=_element()).IsModal is False
+        assert self._window(mocker, modal=None).IsModal is False
+
+    def test_modal_window_is_a_dialog(self, mocker):
+        assert self._window(mocker, modal=True, subrole="AXStandardWindow").IsDialog is True
+
+    def test_system_dialog_without_axmodal_is_a_dialog(self, mocker):
+        """A TCC prompt from UserNotificationCenter leaves AXModal False."""
+        assert self._window(mocker, modal=False, subrole="AXSystemDialog").IsDialog is True
+
+    def test_plain_dialog_subrole_is_not_enough(self, mocker):
+        """Chrome reports subrole AXDialog on its ordinary browser window."""
+        assert self._window(mocker, modal=False, subrole="AXDialog").IsDialog is False
 
 
 ALERT = _rect(802, 310, 260, 285)
@@ -116,7 +135,7 @@ class TestApplicationDialog:
 
     def test_floating_alert_of_background_app(self, mocker):
         """Docker Desktop: modal-panel level while another app is active."""
-        alert = _window(ALERT, modal=True)
+        alert = _window(ALERT, dialog=True)
         app = self._app(mocker, 10, [alert])
         screen = [
             _on_screen(10, WindowLevel.ModalPanel, 0, ALERT),
@@ -132,7 +151,7 @@ class TestApplicationDialog:
 
     def test_buried_alert_of_background_app(self, mocker):
         """Finder "Empty Bin" after switching away: normal level, behind."""
-        alert = _window(ALERT, modal=True)
+        alert = _window(ALERT, dialog=True)
         app = self._app(mocker, 10, [alert])
         screen = [
             _on_screen(20, WindowLevel.Normal, 0, OTHER),
@@ -147,7 +166,7 @@ class TestApplicationDialog:
         assert dialog.reachable is False
 
     def test_alert_of_frontmost_app(self, mocker):
-        alert = _window(ALERT, modal=True)
+        alert = _window(ALERT, dialog=True)
         main = _window(MAIN)
         app = self._app(mocker, 10, [alert, main])
         screen = [
@@ -176,7 +195,7 @@ class TestApplicationDialog:
         assert dialog.frontmost is True
 
     def test_frame_match_tolerates_a_point(self, mocker):
-        alert = _window(_rect(802.5, 310, 260, 285), modal=True)
+        alert = _window(_rect(802.5, 310, 260, 285), dialog=True)
         app = self._app(mocker, 10, [alert])
         screen = [_on_screen(10, WindowLevel.ModalPanel, 0, ALERT)]
 
@@ -192,7 +211,7 @@ class TestApplicationDialog:
 
     def test_unmatched_on_screen_window_is_skipped(self, mocker):
         """A tooltip or popup has no AXWindow; the alert behind it is still found."""
-        alert = _window(ALERT, modal=True)
+        alert = _window(ALERT, dialog=True)
         app = self._app(mocker, 10, [alert])
         screen = [
             _on_screen(10, WindowLevel.Normal, 0, _rect(1, 1, 50, 20)),
@@ -202,14 +221,14 @@ class TestApplicationDialog:
         assert app._dialog(screen).window is alert
 
     def test_none_without_on_screen_windows(self, mocker):
-        app = self._app(mocker, 10, [_window(ALERT, modal=True)])
+        app = self._app(mocker, 10, [_window(ALERT, dialog=True)])
         mocker.patch.object(ApplicationControl, "Windows", new_callable=mocker.PropertyMock)
 
         assert app._dialog([_on_screen(20, WindowLevel.Normal, 0, OTHER)]) is None
         ApplicationControl.Windows.assert_not_called()
 
     def test_dialog_property_reads_the_window_server(self, mocker):
-        alert = _window(ALERT, modal=True)
+        alert = _window(ALERT, dialog=True)
         app = self._app(mocker, 10, [alert])
         mocker.patch.object(
             controls,

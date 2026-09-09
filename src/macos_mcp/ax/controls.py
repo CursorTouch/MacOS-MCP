@@ -1513,7 +1513,7 @@ class ApplicationControl(Control):
             if window is None:
                 continue
             floating = entry.layer > WindowLevel.Normal
-            if window.IsModal:
+            if window.IsDialog:
                 return DialogInfo(self, window, floating=floating, frontmost=frontmost)
             if sheet := window.Sheet:
                 return DialogInfo(self, sheet, floating=floating, frontmost=frontmost)
@@ -1879,6 +1879,24 @@ class WindowControl(Control):
         application's MainWindow is always the window *behind* its dialog.
         """
         return GetAttribute(self.Element, Attribute.Main) is True
+
+    @property
+    def IsDialog(self) -> bool:
+        """Whether this window is an alert or dialog rather than a document window.
+
+        AXModal covers an application's own alerts. A system-generated one
+        does not set it: the privacy and pairing prompts raised by
+        UserNotificationCenter -- "Allow 'Google Chrome' to find devices on
+        local networks?" -- report AXModal False and identify themselves by
+        subrole instead. Apple documents AXSystemDialog as a dialog that
+        floats on the top layer whichever application is frontmost, which is
+        exactly how those behave.
+
+        Subrole alone would over-match: Chrome reports subrole AXDialog on
+        its ordinary browser window, so only the system subrole is trusted
+        without AXModal.
+        """
+        return self.IsModal or self.Subrole == Subrole.SystemDialog
 
     @property
     def Sheet(self) -> Optional[Control]:
