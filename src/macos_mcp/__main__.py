@@ -46,6 +46,7 @@ import socket
 import signal
 import subprocess
 import sys
+import time
 from threading import Lock
 import click
 
@@ -915,15 +916,33 @@ _LAUNCH_AGENTS_DIR = Path.home() / "Library" / "LaunchAgents"
 _PLIST_PATH = _LAUNCH_AGENTS_DIR / f"{_AGENT_LABEL}.plist"
 
 
+def _port_available(host: str, port: int) -> bool:
+    """Return whether a TCP port can be bound on host."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind((host, port))
+    except OSError:
+        return False
+    return True
+
+
+def _wait_for_port_available(host: str, port: int, timeout: float = 2.0) -> bool:
+    """Wait briefly for a recently stopped server to release its TCP port."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if _port_available(host, port):
+            return True
+        now = time.monotonic()
+        if now >= deadline:
+            return False
+        time.sleep(min(0.1, deadline - now))
+
+
 def _find_free_port(host: str, preferred: int, max_tries: int = 100) -> int:
     """Return the first free TCP port at or above preferred on host."""
     for port in range(preferred, preferred + max_tries):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind((host, port))
-                return port
-        except OSError:
-            continue
+        if _port_available(host, port):
+            return port
     raise click.ClickException(
         f"No free port found in range {preferred}–{preferred + max_tries - 1} on {host}."
     )
@@ -963,6 +982,164 @@ def _launchctl(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["launchctl", *args], capture_output=True, text=True)
 
 
+def _launchctl_field(output: str, field: str) -> str | None:
+    """Return a top-level field from `launchctl print` output."""
+    prefix = f"{field} = "
+    depth = 0
+    for line in output.splitlines():
+        stripped = line.strip()
+        if depth == 1 and stripped.startswith(prefix):
+            return stripped[len(prefix) :]
+        depth += line.count("{") - line.count("}")
+    return None
+
+
+def _server_accepting_connections(host: str, port: int) -> bool:
+    """Return whether the configured server endpoint accepts TCP connections."""
+    probe_host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+    try:
+        with socket.create_connection((probe_host, port), timeout=0.1):
+            return True
+    except OSError:
+        return False
+
+
+def _launch_agent_loaded(domain: str, timeout: float = 0.5) -> bool:
+    """Check whether the existing agent is loaded, tolerating transient print failures."""
+    deadline = time.monotonic() + timeout
+    while True:
+        result = _launchctl("print", f"{domain}/{_AGENT_LABEL}")
+        if result.returncode == 0:
+            return True
+        now = time.monotonic()
+        if now >= deadline:
+            return False
+        time.sleep(min(0.1, deadline - now))
+
+
+def _wait_for_launch_agent_start(
+    domain: str, host: str, port: int, timeout: float = 10.0
+) -> tuple[bool, str]:
+    """Wait for a freshly bootstrapped agent to reach its listen endpoint."""
+    deadline = time.monotonic() + timeout
+    saw_running = False
+    last_print_error = "launchctl print could not find the service"
+
+    while True:
+        result = _launchctl("print", f"{domain}/{_AGENT_LABEL}")
+        if result.returncode == 0:
+            state = _launchctl_field(result.stdout, "state")
+            last_exit = _launchctl_field(result.stdout, "last exit code")
+            last_signal = _launchctl_field(result.stdout, "last terminating signal")
+            if last_exit and last_exit != "(never exited)":
+                return False, f"state={state or 'unknown'}, last exit code={last_exit}"
+            if last_signal:
+                return False, f"state={state or 'unknown'}, last terminating signal={last_signal}"
+            if state == "running":
+                saw_running = True
+                if _server_accepting_connections(host, port):
+                    return True, "accepting connections"
+            last_print_error = f"state={state or 'unknown'}"
+        else:
+            last_print_error = (
+                result.stderr.strip() or "launchctl print could not find the service"
+            )
+
+        now = time.monotonic()
+        if now >= deadline:
+            break
+        time.sleep(min(0.1, deadline - now))
+
+    if saw_running:
+        return False, "process ran but endpoint did not accept connections before timeout"
+    return False, last_print_error
+
+
+def _wait_for_launch_agent_running(
+    domain: str, timeout: float = 10.0
+) -> tuple[bool, str]:
+    """Wait for a restored launch agent to report a running state."""
+    deadline = time.monotonic() + timeout
+    last_detail = "launchctl print could not find the service"
+
+    while True:
+        result = _launchctl("print", f"{domain}/{_AGENT_LABEL}")
+        if result.returncode == 0:
+            state = _launchctl_field(result.stdout, "state")
+            last_exit = _launchctl_field(result.stdout, "last exit code")
+            last_signal = _launchctl_field(result.stdout, "last terminating signal")
+            if last_exit and last_exit != "(never exited)":
+                return False, f"state={state or 'unknown'}, last exit code={last_exit}"
+            if last_signal:
+                return False, f"state={state or 'unknown'}, last terminating signal={last_signal}"
+            if state == "running":
+                return True, "running"
+            last_detail = f"state={state or 'unknown'}"
+        else:
+            last_detail = result.stderr.strip() or last_detail
+
+        now = time.monotonic()
+        if now >= deadline:
+            return False, last_detail
+        time.sleep(min(0.1, deadline - now))
+
+
+def _wait_for_launch_agent_unloaded(
+    domain: str, timeout: float = 2.0
+) -> tuple[bool, str]:
+    """Wait until launchd no longer reports the agent after bootout."""
+    deadline = time.monotonic() + timeout
+    last_state = "unknown"
+
+    while True:
+        result = _launchctl("print", f"{domain}/{_AGENT_LABEL}")
+        if result.returncode != 0:
+            return True, "unloaded"
+        last_state = _launchctl_field(result.stdout, "state") or "unknown"
+        now = time.monotonic()
+        if now >= deadline:
+            return False, f"state={last_state}"
+        time.sleep(min(0.1, deadline - now))
+
+
+def _rollback_launch_agent(
+    domain: str,
+    previous_plist: bytes | None,
+    previous_loaded: bool,
+    bootstrap_attempted: bool,
+) -> str | None:
+    """Restore the pre-install launchd state after a failed install transaction."""
+    errors: list[str] = []
+
+    if bootstrap_attempted:
+        _launchctl("bootout", f"{domain}/{_AGENT_LABEL}")
+        unloaded, detail = _wait_for_launch_agent_unloaded(domain)
+        if not unloaded:
+            errors.append(f"new launch agent did not unload ({detail})")
+
+    if previous_plist is None:
+        _PLIST_PATH.unlink(missing_ok=True)
+        return "; ".join(errors) or None
+
+    try:
+        _PLIST_PATH.write_bytes(previous_plist)
+    except OSError as exc:
+        errors.append(f"could not restore previous plist: {exc}")
+        return "; ".join(errors)
+
+    if previous_loaded:
+        restored = _launchctl("bootstrap", domain, str(_PLIST_PATH))
+        if restored.returncode != 0:
+            detail = restored.stderr.strip() or f"exit status {restored.returncode}"
+            errors.append(f"could not restore previous launch agent: {detail}")
+        else:
+            running, detail = _wait_for_launch_agent_running(domain)
+            if not running:
+                errors.append(f"restored launch agent did not reach running state ({detail})")
+
+    return "; ".join(errors) or None
+
+
 @main.command()
 @click.option(
     "--transport",
@@ -981,38 +1158,81 @@ def install(transport: str, host: str, port: int, force: bool) -> None:
         click.echo("Use --force to reinstall.")
         return
 
-    # Auto-select a free port when the user didn't explicitly pass --port.
-    ctx = click.get_current_context()
-    if ctx.get_parameter_source("port") == click.core.ParameterSource.DEFAULT:
-        selected = _find_free_port(host, port)
-        if selected != port:
-            click.echo(f"Port {port} is in use — using {selected} instead.")
-        port = selected
-
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     _LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
 
     exe = _resolve_program()
-    args = exe + ["serve", "--transport", transport, "--host", host, "--port", str(port)]
-    _PLIST_PATH.write_text(_build_plist(args))
-    click.echo(f"Wrote {_PLIST_PATH}")
-
     uid = os.getuid()
     domain = f"gui/{uid}"
+    previous_plist = _PLIST_PATH.read_bytes() if _PLIST_PATH.exists() else None
+    previous_loaded = (
+        _launch_agent_loaded(domain) if force and previous_plist is not None else False
+    )
+    bootstrap_attempted = False
 
-    # Unload first if already running (needed for --force)
-    _launchctl("bootout", f"{domain}/{_AGENT_LABEL}")
+    try:
+        if previous_loaded:
+            result = _launchctl("bootout", f"{domain}/{_AGENT_LABEL}")
+            if result.returncode != 0:
+                detail = result.stderr.strip() or f"exit status {result.returncode}"
+                raise click.ClickException(f"launchctl bootout failed:\n{detail}")
+            unloaded, detail = _wait_for_launch_agent_unloaded(domain)
+            if not unloaded:
+                raise click.ClickException(f"launch agent did not unload ({detail})")
+            _wait_for_port_available(host, port)
 
-    result = _launchctl("bootstrap", domain, str(_PLIST_PATH))
-    if result.returncode != 0:
-        raise click.ClickException(f"launchctl bootstrap failed:\n{result.stderr.strip()}")
+        # Auto-select a free port when the user didn't explicitly pass --port.
+        ctx = click.get_current_context()
+        if ctx.get_parameter_source("port") == click.core.ParameterSource.DEFAULT:
+            selected = _find_free_port(host, port)
+            if selected != port:
+                click.echo(f"Port {port} is in use — using {selected} instead.")
+            port = selected
+        elif not _port_available(host, port):
+            raise click.ClickException(f"Port {port} is already in use on {host}.")
 
-    click.echo(f"Launch agent loaded — server is starting now.")
+        args = exe + [
+            "serve",
+            "--transport",
+            transport,
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
+        _PLIST_PATH.write_text(_build_plist(args))
+        click.echo(f"Wrote {_PLIST_PATH}")
+
+        bootstrap_attempted = True
+        result = _launchctl("bootstrap", domain, str(_PLIST_PATH))
+        if result.returncode != 0:
+            raise click.ClickException(
+                f"launchctl bootstrap failed:\n{result.stderr.strip()}"
+            )
+
+        started, detail = _wait_for_launch_agent_start(domain, host, port)
+        if not started:
+            raise click.ClickException(
+                "Launch agent loaded but the server did not start "
+                f"({detail}).\nCheck {CONFIG_DIR / 'server.error.log'} for startup errors."
+            )
+    except Exception as exc:
+        rollback_error = _rollback_launch_agent(
+            domain,
+            previous_plist,
+            previous_loaded,
+            bootstrap_attempted,
+        )
+        if rollback_error:
+            raise click.ClickException(f"{exc}\nRollback failed: {rollback_error}") from exc
+        raise
+
+    click.echo("Launch agent loaded — accepting connections.")
     click.echo(f"  Transport : {transport}")
     click.echo(f"  Address   : {host}:{port}")
     click.echo(f"  Logs      : {CONFIG_DIR / 'server.log'}")
-    click.echo(f"\nThe server will restart automatically at every login.")
-    click.echo(f"Run `macos-mcp uninstall` to remove it.")
+    click.echo("\nThe server will restart automatically at every login.")
+    click.echo("Run `macos-mcp uninstall` to remove it.")
 
 
 @main.command()
