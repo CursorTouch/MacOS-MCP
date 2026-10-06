@@ -237,22 +237,10 @@ async def shell_tool(
     ),
 )
 async def state_tool(use_vision: bool = False, ctx: Context = None):
-    # Calculate scale factor to cap resolution at 1080p
-    scale = 1.0
-    if screen_size and screen_size.width > 0 and screen_size.height > 0:
-        scale_width = (
-            MAX_IMAGE_WIDTH / screen_size.width
-            if screen_size.width > MAX_IMAGE_WIDTH
-            else 1.0
-        )
-        scale_height = (
-            MAX_IMAGE_HEIGHT / screen_size.height
-            if screen_size.height > MAX_IMAGE_HEIGHT
-            else 1.0
-        )
-        scale = min(scale_width, scale_height)
-
-    desktop_state = await desktop.async_get_state(use_vision=use_vision, as_bytes=True, scale=scale)
+    # Desktop converts Retina backing pixels to the logical coordinates used
+    # by input tools.  Do not apply a virtual-desktop cap here: it mixes scales
+    # from different displays and makes a Snapshot disagree with Move/Click.
+    desktop_state = await desktop.async_get_state(use_vision=use_vision, as_bytes=True, scale=1.0)
     interactive_elements = desktop_state.tree_state.interactive_elements_to_string()
     scrollable_elements = desktop_state.tree_state.scrollable_elements_to_string()
     windows = desktop_state.windows_to_string()
@@ -261,6 +249,9 @@ async def state_tool(use_vision: bool = False, ctx: Context = None):
     snapshot = dedent(f"""
     Focused Window:
     {active_window}
+
+    Input Coordinate Space:
+    {desktop.active_display_coordinate_space(desktop_state.active_window)}
 
     Open Applications:
     {windows}
