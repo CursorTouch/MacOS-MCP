@@ -32,6 +32,43 @@ class TestDesktopScreenSize:
         assert size.width == 2560
         assert size.height == 1600
 
+    def test_get_display_for_active_window(self, mocker):
+        """Select the display that contains the active window centre."""
+        mocker.patch(
+            "macos_mcp.desktop.service.ax.GetPerDisplayInfo",
+            return_value=[
+                {
+                    "logical_left": -1680,
+                    "logical_top": 0,
+                    "logical_width": 1680,
+                    "logical_height": 1050,
+                    "scale": 1.0,
+                },
+                {
+                    "logical_left": 0,
+                    "logical_top": 0,
+                    "logical_width": 1440,
+                    "logical_height": 900,
+                    "scale": 2.0,
+                },
+            ],
+        )
+        window = Window(
+            name="Chrome",
+            is_browser=True,
+            status=Status.ACTIVE,
+            bounding_box=BoundingBox(
+                left=100, top=100, width=800, height=600, right=900, bottom=700
+            ),
+            pid=1,
+            bundle_id="com.google.Chrome",
+        )
+
+        display = Desktop().get_display_for_window(window)
+
+        assert display is not None
+        assert display["scale"] == 2.0
+
 
 @pytest.mark.unit
 class TestDesktopAppManagement:

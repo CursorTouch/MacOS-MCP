@@ -43,6 +43,42 @@ class Desktop:
         width, height = ax.GetScreenSize()
         return Size(width=width, height=height)
 
+    def get_display_for_window(self, window: Optional[Window]) -> Optional[dict]:
+        """Return the display containing the centre of ``window``.
+
+        Accessibility and Quartz mouse events use logical display points, while
+        a Retina capture uses backing pixels.  Snapshot needs the display that
+        owns the active window so it can return an image in the same coordinate
+        space that the input tools accept.
+        """
+        if window is None:
+            return None
+
+        box = window.bounding_box
+        center_x = (box.left + box.right) / 2
+        center_y = (box.top + box.bottom) / 2
+        for display in ax.GetPerDisplayInfo():
+            left = display["logical_left"]
+            top = display["logical_top"]
+            if (
+                left <= center_x < left + display["logical_width"]
+                and top <= center_y < top + display["logical_height"]
+            ):
+                return display
+        return None
+
+    def active_display_coordinate_space(self, window: Optional[Window]) -> str:
+        """Describe the active display's input coordinate system for Snapshot."""
+        display = self.get_display_for_window(window)
+        if display is None:
+            return "macOS logical points (display could not be identified)"
+        return (
+            "macOS logical points; active display origin "
+            f"({int(display['logical_left'])},{int(display['logical_top'])}), "
+            f"size {int(display['logical_width'])}x{int(display['logical_height'])}, "
+            f"backing scale {display['scale']:g}x"
+        )
+
     def get_state(
         self,
         use_vision: bool = False,
@@ -53,10 +89,15 @@ class Desktop:
         active_window = self.get_foreground_window()
         tree_state = self.tree.get_state(active_window=active_window)
         if use_vision:
+            # Convert Retina backing pixels to logical points for the active
+            # display.  Move/Click/Type already use these logical points, so
+            # image coordinates and tool coordinates now agree.
+            display = self.get_display_for_window(active_window)
+            logical_scale = 1.0 / display["scale"] if display else 1.0
             screenshot = self.get_annotated_screenshot(
                 nodes=tree_state.interactive_nodes,
                 as_bytes=as_bytes,
-                scale=scale,
+                scale=min(scale, logical_scale),
             )
         else:
             screenshot = None
