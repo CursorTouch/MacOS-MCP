@@ -347,7 +347,7 @@ async def type_tool(
     ),
 )
 async def scroll_tool(
-    loc: list[int] = None,
+    loc: list[int] | None = None,
     type: Literal["horizontal", "vertical"] = "vertical",
     direction: Literal["up", "down", "left", "right"] = "down",
     wheel_times: int = 1,
