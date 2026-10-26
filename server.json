@@ -31,6 +31,12 @@
           "value": "macos-mcp",
           "format": "string",
           "isRequired": true
+        },
+        {
+          "description": "Start the MCP server",
+          "value": "serve",
+          "format": "string",
+          "isRequired": true
         }
       ]
     }

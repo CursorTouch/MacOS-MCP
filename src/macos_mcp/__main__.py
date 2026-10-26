@@ -520,9 +520,15 @@ def _choose_value(ctx: click.Context, name: str, cli_value, config_value, defaul
     return default_value
 
 
-@click.group()
-def main():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def main(ctx):
     """macOS-MCP: MCP server for macOS desktop automation."""
+    # Default to `serve` when no subcommand is given so `uvx macos-mcp` (as
+    # documented in the README and the MCP registry server.json) starts the
+    # server instead of exiting with a usage error (#71).
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(serve)
 
 
 @main.command()

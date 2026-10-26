@@ -59,11 +59,11 @@
 Run the server directly:
 
 ```shell
-uvx macos-mcp
+uvx macos-mcp serve
 
 # Or with SSE/Streamable HTTP for network access
-uvx macos-mcp --transport sse --host localhost --port 8000
-uvx macos-mcp --transport streamable-http --host localhost --port 8000
+uvx macos-mcp serve --transport sse --host localhost --port 8000
+uvx macos-mcp serve --transport streamable-http --host localhost --port 8000
 ```
 
 Run it as a background service that starts now and at every login:
@@ -131,7 +131,7 @@ The `Snapshot` tool requires Screen Recording permissions to capture screenshots
     "mcpServers": {
       "macos-mcp": {
         "command": "uvx",
-        "args": ["macos-mcp"]
+        "args": ["macos-mcp", "serve"]
       }
     }
   }
@@ -235,7 +235,7 @@ The `Snapshot` tool requires Screen Recording permissions to capture screenshots
     "mcpServers": {
       "macos-mcp": {
         "command": "uvx",
-        "args": ["macos-mcp"]
+        "args": ["macos-mcp", "serve"]
       }
     }
   }
@@ -360,7 +360,7 @@ The `Snapshot` tool requires Screen Recording permissions to capture screenshots
 <details>
   <summary><strong>Other Integrations</strong></summary>
 
-  Any client supporting the Model Context Protocol can integrate macOS-MCP by configuring the `uvx macos-mcp` command in their MCP server settings.
+  Any client supporting the Model Context Protocol can integrate macOS-MCP by configuring the `uvx macos-mcp serve` command in their MCP server settings.
 
 </details>
 
@@ -395,13 +395,13 @@ macOS-MCP provides a comprehensive toolset for desktop automation:
 
 ### Authentication
 ```shell
-macos-mcp --transport sse --host 0.0.0.0 --auth-key "your_token"
+macos-mcp serve --transport sse --host 0.0.0.0 --auth-key "your_token"
 ```
 Requires `Authorization: Bearer your_token` header on all requests.
 
 ### IP Allowlist
 ```shell
-macos-mcp --auth-key "token" --ip-allowlist "203.0.113.0/24,198.51.100.5"
+macos-mcp serve --auth-key "token" --ip-allowlist "203.0.113.0/24,198.51.100.5"
 ```
 Restricts connections to specified CIDR ranges.
 
@@ -409,7 +409,7 @@ Restricts connections to specified CIDR ranges.
 ```shell
 openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
 
-macos-mcp --ssl-certfile cert.pem --ssl-keyfile key.pem
+macos-mcp serve --ssl-certfile cert.pem --ssl-keyfile key.pem
 ```
 
 ### OAuth 2.0 + PKCE
@@ -417,7 +417,7 @@ macos-mcp --ssl-certfile cert.pem --ssl-keyfile key.pem
 For MCP clients that use OAuth (e.g. Claude Desktop) instead of a static API key:
 
 ```shell
-macos-mcp --transport streamable-http --host 0.0.0.0 \
+macos-mcp serve --transport streamable-http --host 0.0.0.0 \
   --ssl-certfile ~/.macos-mcp/cert.pem \
   --ssl-keyfile  ~/.macos-mcp/key.pem \
   --oauth-client-id my-client \
@@ -545,7 +545,7 @@ All variables are optional. Set them via the `env` key in `claude_desktop_config
   "mcpServers": {
     "macos-mcp": {
       "command": "uvx",
-      "args": ["macos-mcp", "--transport", "sse", "--host", "0.0.0.0"],
+      "args": ["macos-mcp", "serve", "--transport", "sse", "--host", "0.0.0.0"],
       "env": {
         "MACOS_MCP_AUTH_KEY": "your_token",
         "MACOS_MCP_IP_ALLOWLIST": "203.0.113.0/24",
@@ -570,7 +570,7 @@ To disable telemetry, set `ANONYMIZED_TELEMETRY` to `false`:
   "mcpServers": {
     "macos-mcp": {
       "command": "uvx",
-      "args": ["macos-mcp"],
+      "args": ["macos-mcp", "serve"],
       "env": { "ANONYMIZED_TELEMETRY": "false" }
     }
   }
