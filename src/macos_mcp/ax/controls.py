@@ -49,7 +49,7 @@ from .core import (
     IsAttributeSettable,
     GetElementPid,
     GetScreenSize,
-    GetForegroundWindowPID,
+    GetFrontmostApplicationPID,
     ActivateApplication,
     Click as _Click,
     RightClick as _RightClick,
@@ -1626,15 +1626,14 @@ class ApplicationControl(Control):
         """
         Check if this application is the currently active (frontmost) application.
 
-        Uses CGWindowListCopyWindowInfo (via GetForegroundWindowPID) instead of
-        NSRunningApplication.isActive() because the latter relies on AppKit
-        notifications delivered via NSRunLoop. Without an active event loop
-        (e.g. Python scripts, notebooks), isActive() returns stale cached data.
+        Uses GetFrontmostApplicationPID, which drains the run loop before
+        asking NSWorkspace; NSRunningApplication.isActive() alone returns
+        stale data without an event loop.
         """
         pid = self.PID
         if pid is None:
             return False
-        frontmost_pid = GetForegroundWindowPID()
+        frontmost_pid = GetFrontmostApplicationPID()
         return pid == frontmost_pid
 
     @property

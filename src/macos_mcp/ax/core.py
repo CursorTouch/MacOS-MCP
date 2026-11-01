@@ -2640,24 +2640,37 @@ async def AsyncExecuteCommand(
 # =============================================================================
 
 
+def GetFrontmostApplicationPID() -> Optional[int]:
+    """
+    PID of the active application: the one that owns the menu bar and
+    receives keyboard input.
+
+    Asks NSWorkspace after draining the run loop, which keeps its answer
+    current without an event loop (see _DrainRunLoop). The window server's
+    topmost window is not the same thing: clicking the wallpaper activates
+    Finder and slides every window to the screen edge, yet the slid window
+    is still listed on screen first, so it named Chrome while Finder owned
+    the menu bar. That is only the fallback, for when NSWorkspace has no
+    answer.
+    """
+    app = _GetFrontmostApplicationRaw()
+    if app is not None and (pid := app.processIdentifier()):
+        return int(pid)
+    return GetForegroundWindowPID()
+
+
 def GetFrontmostApplication() -> Optional["ApplicationControl"]:
     """
     Get the frontmost application as an ApplicationControl.
     Returns a fully-typed Control that supports .FocusedWindow, .Windows,
     .Title, .FindFirst(), fluent chaining, etc.
 
-    Uses CGWindowListCopyWindowInfo (window server) instead of
-    NSWorkspace.frontmostApplication() because NSWorkspace relies on
-    AppKit notifications delivered via NSRunLoop. Without an active
-    event loop (e.g. Python scripts, notebooks), NSWorkspace returns
-    stale cached data and won't reflect focus changes.
-
     Returns:
         ApplicationControl or None.
     """
     from .controls import ApplicationControl
 
-    pid = GetForegroundWindowPID()
+    pid = GetFrontmostApplicationPID()
     if pid:
         return ApplicationControl(pid=pid)
     return None
@@ -2672,7 +2685,7 @@ def GetForegroundControl() -> Optional["WindowControl"]:
     """
     from .controls import ApplicationControl
 
-    pid = GetForegroundWindowPID()
+    pid = GetFrontmostApplicationPID()
     if pid:
         app = ApplicationControl(pid=pid)
         return app.FocusedWindow
@@ -2688,7 +2701,7 @@ def GetFocusedControl() -> Optional["Control"]:
     """
     from .controls import ApplicationControl
 
-    pid = GetForegroundWindowPID()
+    pid = GetFrontmostApplicationPID()
     if pid:
         app = ApplicationControl(pid=pid)
         return app.FocusedUIElement

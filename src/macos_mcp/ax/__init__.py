@@ -146,6 +146,7 @@ from .core import (
     # Application & Window (high-level, returns Control objects)
     GetOnScreenWindows,
     GetForegroundWindowPID,
+    GetFrontmostApplicationPID,
     GetFrontmostApplication,
     GetForegroundControl,
     GetFocusedControl,
@@ -339,6 +340,7 @@ __all__ = [
     "TypeText",
     "GetOnScreenWindows",
     "GetForegroundWindowPID",
+    "GetFrontmostApplicationPID",
     "GetFrontmostApplication",
     "GetForegroundControl",
     "GetFocusedControl",

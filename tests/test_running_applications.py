@@ -124,3 +124,23 @@ class TestGetRunningApplicationByBundleId:
     def test_none_when_absent(self, mocker):
         mocker.patch("macos_mcp.ax.core.GetRunningApplicationsRaw", return_value=[])
         assert ax_core.GetRunningApplicationByBundleId("com.google.Chrome") is None
+
+
+@pytest.mark.unit
+class TestGetFrontmostApplicationPID:
+    def test_the_active_app_wins_over_the_topmost_window(self, mocker):
+        """Clicking the wallpaper activates Finder while the slid-away Chrome
+        window is still first in the window list; the snapshot must follow
+        the active app, or it shows Chrome's elements over the desktop."""
+        finder = MagicMock()
+        finder.processIdentifier.return_value = 111
+        mocker.patch("macos_mcp.ax.core._GetFrontmostApplicationRaw", return_value=finder)
+        mocker.patch("macos_mcp.ax.core.GetForegroundWindowPID", return_value=222)
+
+        assert ax_core.GetFrontmostApplicationPID() == 111
+
+    def test_falls_back_to_the_window_server(self, mocker):
+        mocker.patch("macos_mcp.ax.core._GetFrontmostApplicationRaw", return_value=None)
+        mocker.patch("macos_mcp.ax.core.GetForegroundWindowPID", return_value=222)
+
+        assert ax_core.GetFrontmostApplicationPID() == 222
