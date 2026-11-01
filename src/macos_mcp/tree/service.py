@@ -144,12 +144,16 @@ class Tree:
         system_bundle_ids: list[str] = []
         desktop_only_bundle_ids: list[str] = []
         extras_only_bundle_ids: list[str] = self.bundles_with_menu_bar_extras()
+        active_bundle_id = active_window.bundle_id if active_window else None
+        running = ax.GetRunningApplicationsByBundleIds(
+            [*SYSTEM_UI_BUNDLE_IDS, *([active_bundle_id] if active_bundle_id else [])]
+        )
         for bundle_id in SYSTEM_UI_BUNDLE_IDS:
-            if app := ax.GetRunningApplicationByBundleId(bundle_id):
+            if app := running.get(bundle_id):
                 system_bundle_ids.append(app.BundleIdentifier)
                 bundle_ids.append(app.BundleIdentifier)
         if active_window:
-            if app := ax.GetRunningApplicationByBundleId(active_window.bundle_id):
+            if app := running.get(active_window.bundle_id):
                 ax.SetAttribute(app.Element, "AXEnhancedUserInterface", True)
             bundle_ids.append(active_window.bundle_id)
             # When a non-Finder app is active but has no visible window (e.g. minimized),

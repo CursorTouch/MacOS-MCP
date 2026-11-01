@@ -85,22 +85,36 @@ class Desktop:
         as_bytes: bool = False,
         scale: float = 1.0,
     ):
-        windows = self.get_windows()
-        active_window = self.get_foreground_window()
-        tree_state = self.tree.get_state(active_window=active_window)
-        if use_vision:
-            # Convert Retina backing pixels to logical points for the active
-            # display.  Move/Click/Type already use these logical points, so
-            # image coordinates and tool coordinates now agree.
-            display = self.get_display_for_window(active_window)
-            logical_scale = 1.0 / display["scale"] if display else 1.0
-            screenshot = self.get_annotated_screenshot(
-                nodes=tree_state.interactive_nodes,
-                as_bytes=as_bytes,
-                scale=min(scale, logical_scale),
+        if not use_vision:
+            windows = self.get_windows()
+            active_window = self.get_foreground_window()
+            return DesktopState(
+                active_window=active_window,
+                windows=windows,
+                screenshot=None,
+                tree_state=self.tree.get_state(active_window=active_window),
             )
-        else:
-            screenshot = None
+
+        # The capture shells out to screencapture while the window list and
+        # tree are read over the Accessibility API, so neither waits on the
+        # other; only the annotation needs the tree, and it is drawn after.
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="screenshot") as pool:
+            capture = pool.submit(self.get_screenshot)
+            windows = self.get_windows()
+            active_window = self.get_foreground_window()
+            tree_state = self.tree.get_state(active_window=active_window)
+            image = capture.result()
+        # Convert Retina backing pixels to logical points for the active
+        # display.  Move/Click/Type already use these logical points, so
+        # image coordinates and tool coordinates now agree.
+        display = self.get_display_for_window(active_window)
+        logical_scale = 1.0 / display["scale"] if display else 1.0
+        screenshot = self.get_annotated_screenshot(
+            nodes=tree_state.interactive_nodes,
+            as_bytes=as_bytes,
+            scale=min(scale, logical_scale),
+            image=image,
+        )
         return DesktopState(
             active_window=active_window,
             windows=windows,
@@ -524,19 +538,21 @@ class Desktop:
         nodes: list[TreeElementNode],
         as_bytes: bool = False,
         scale: float = 1.0,
+        image: Optional[Image.Image] = None,
     ) -> Union[Image.Image, bytes, None]:
         """
         Take a screenshot and annotate it with numbered bounding boxes for each
-        interactive element. Captures the screenshot internally. Mirrors Windows-MCP.
+        interactive element. Mirrors Windows-MCP.
 
         Args:
             nodes: List of TreeElementNode (interactive_nodes from tree state).
             as_bytes: If True, return PNG bytes; otherwise return PIL Image.
+            image: A screenshot already taken; captured here when None.
 
         Returns:
             Annotated PIL Image, PNG bytes, or None on failure.
         """
-        img = self.get_screenshot()
+        img = image if image is not None else self.get_screenshot()
         if img is None:
             logger.warning(
                 "Screenshot capture failed; returning no annotated screenshot. If this "

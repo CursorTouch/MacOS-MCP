@@ -13,7 +13,7 @@ import subprocess
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, List, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import Any, Iterable, List, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import Quartz
 from Quartz import (
@@ -2777,7 +2777,28 @@ def GetRunningApplicationByBundleId(bundle_id: str) -> Optional["ApplicationCont
     Returns:
         ApplicationControl if found, None otherwise.
     """
+    return GetRunningApplicationsByBundleIds([bundle_id]).get(bundle_id)
+
+
+def GetRunningApplicationsByBundleIds(
+    bundle_ids: Iterable[str],
+) -> dict[str, "ApplicationControl"]:
+    """
+    Resolve several bundle identifiers in one pass over the running apps.
+
+    Reading each app's bundle id through PyObjC costs ~1.5ms for ~45 apps, so
+    a state capture that looked its six apps up one by one paid that six times.
+
+    Returns:
+        bundle id -> ApplicationControl, for the ids that are running.
+    """
     from .controls import ApplicationControl
+
+    wanted = set(bundle_ids)
+    matches: dict[str, list[Any]] = {}
+    for app in GetRunningApplicationsRaw():
+        if (bid := app.bundleIdentifier()) and (bid := str(bid)) in wanted:
+            matches.setdefault(bid, []).append(app)
 
     # Several processes can share a bundle id -- a headless Chrome launched
     # with --no-startup-window runs alongside the browser -- so prefer the one
@@ -2786,16 +2807,14 @@ def GetRunningApplicationByBundleId(bundle_id: str) -> Optional["ApplicationCont
     # can change at any time. The wrong pick is not harmless: every Cocoa
     # process has a menu bar, so the headless twin answers a scan with menus
     # and nothing else.
-    matches = [
-        app
-        for app in GetRunningApplicationsRaw()
-        if (bid := app.bundleIdentifier()) and str(bid) == bundle_id
-    ]
-    if not matches:
-        return None
-    if len(matches) > 1:
-        on_screen = {w.pid for w in GetOnScreenWindows() if w.is_application}
-        matches.sort(
-            key=lambda app: (app.processIdentifier() not in on_screen, app.activationPolicy())
-        )
-    return ApplicationControl(pid=matches[0].processIdentifier())
+    on_screen: set[int] | None = None
+    found: dict[str, ApplicationControl] = {}
+    for bid, apps in matches.items():
+        if len(apps) > 1:
+            if on_screen is None:
+                on_screen = {w.pid for w in GetOnScreenWindows() if w.is_application}
+            apps.sort(
+                key=lambda app: (app.processIdentifier() not in on_screen, app.activationPolicy())
+            )
+        found[bid] = ApplicationControl(pid=apps[0].processIdentifier())
+    return found
