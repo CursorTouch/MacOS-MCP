@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `Type` produced the wrong characters on a keyboard layout other than US. Letters, digits and unshifted punctuation were sent as the US-layout virtual key codes in `KEY_NAME_TO_CODE`, and a key code types whatever the active layout puts on that key: code 0 is `a` on a US keyboard and `q` on AZERTY. `TypeText` now injects every character with `CGEventKeyboardSetUnicodeString`, which does not depend on the layout, and keeps real key presses only for Space, Return and Tab. Verified by typing letters, digits, punctuation, `é`, `你`, a tab and a newline into TextEdit on the US layout; a non-US layout was not available to test. `HotKey` still resolves keys through the US table
+
 ## [0.4.7] - 2026-11-01
 
 ### Fixed

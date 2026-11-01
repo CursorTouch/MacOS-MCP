@@ -37,7 +37,6 @@ from Quartz import (
     kCGMouseButtonLeft,
     kCGMouseButtonRight,
     kCGMouseButtonCenter,
-    kCGEventFlagMaskShift,
     CGMainDisplayID,
     CGDisplayPixelsWide,
     CGDisplayPixelsHigh,
@@ -1612,27 +1611,20 @@ def _type_character(char: str, interval: float = 0.01) -> None:
     """
     Type a single character using CGEvent keyboard simulation.
 
-    For ASCII characters with known virtual key codes, generates real
-    key press events (most natural for applications). For everything
-    else, uses CGEventKeyboardSetUnicodeString to inject the character
-    natively without clipboard involvement.
+    Space, Return and Tab are real key presses: their key codes are the same
+    on every layout. Every other character is injected with
+    CGEventKeyboardSetUnicodeString. KEY_NAME_TO_CODE holds US-layout key
+    codes, and the same code types a different character on AZERTY or
+    Dvorak (code 0 is "q" on AZERTY), so typing "a" through it is wrong
+    there; the Unicode string does not depend on the active layout.
     """
-    key_lower = char.lower()
-    if key_lower in KEY_NAME_TO_CODE:
-        key_code = KEY_NAME_TO_CODE[key_lower]
-        flags = 0
-        # Apply shift for uppercase letters
-        if char.isupper():
-            flags = kCGEventFlagMaskShift
-        KeyPress(key_code, flags, interval)
-    elif char == " ":
+    if char == " ":
         KeyPress(KeyCode.Space, 0, interval)
     elif char == "\n":
         KeyPress(KeyCode.Return, 0, interval)
     elif char == "\t":
         KeyPress(KeyCode.Tab, 0, interval)
     else:
-        # Unicode character — use CGEventKeyboardSetUnicodeString
         _type_unicode_char(char)
         time.sleep(interval)
 
