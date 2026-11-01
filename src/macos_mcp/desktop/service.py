@@ -546,11 +546,11 @@ class Desktop:
 
         Args:
             nodes: List of TreeElementNode (interactive_nodes from tree state).
-            as_bytes: If True, return PNG bytes; otherwise return PIL Image.
+            as_bytes: If True, return JPEG bytes; otherwise return PIL Image.
             image: A screenshot already taken; captured here when None.
 
         Returns:
-            Annotated PIL Image, PNG bytes, or None on failure.
+            Annotated PIL Image, JPEG bytes, or None on failure.
         """
         img = image if image is not None else self.get_screenshot()
         if img is None:
@@ -689,7 +689,10 @@ class Desktop:
 
         if as_bytes:
             buf = io.BytesIO()
-            padded.save(buf, format="PNG")
+            # JPEG, not PNG: a screen-sized PNG is ~1MB and slow to encode, while
+            # JPEG at quality 80 is a fraction of both, and a vision model reads
+            # nothing here pixel-exact.
+            padded.save(buf, format="JPEG", quality=80)
             return buf.getvalue()
         return padded
 

@@ -272,7 +272,7 @@ async def state_tool(use_vision: bool = False, ctx: Context = None):
     """)
 
     return [snapshot] + (
-        [Image(data=desktop_state.screenshot, format="png")]
+        [Image(data=desktop_state.screenshot, format="jpeg")]
         if use_vision and desktop_state.screenshot
         else []
     )
