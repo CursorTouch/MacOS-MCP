@@ -7,12 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- `Type` produced the wrong characters on a keyboard layout other than US. Letters, digits and unshifted punctuation were sent as the US-layout virtual key codes in `KEY_NAME_TO_CODE`, and a key code types whatever the active layout puts on that key: code 0 is `a` on a US keyboard and `q` on AZERTY. `TypeText` now injects every character with `CGEventKeyboardSetUnicodeString`, which does not depend on the layout, and keeps real key presses only for Space, Return and Tab. Verified by typing letters, digits, punctuation, `é`, `你`, a tab and a newline into TextEdit on the US layout; a non-US layout was not available to test. `HotKey` still resolves keys through the US table
-
 ## [0.4.7] - 2026-11-01
 
 ### Fixed
+- `Type` produced the wrong characters on a keyboard layout other than US. Letters, digits and unshifted punctuation were sent as the US-layout virtual key codes in `KEY_NAME_TO_CODE`, and a key code types whatever the active layout puts on that key: code 0 is `a` on a US keyboard and `q` on AZERTY. `TypeText` now injects every character with `CGEventKeyboardSetUnicodeString`, which does not depend on the layout, and keeps real key presses only for Space, Return and Tab. Verified by typing letters, digits, punctuation, `é`, `你`, a tab and a newline into TextEdit on the US layout; a non-US layout was not available to test. `HotKey` still resolves keys through the US table
 - Importing `macos_mcp.tree.service` before anything had imported `macos_mcp.desktop` raised `ImportError: cannot import name 'Tree' from partially initialized module`. The tree reads `desktop.config` and `desktop.views`, and `desktop/__init__.py` re-exported `Desktop`, so touching any desktop submodule ran `desktop/service.py`, which imports the tree — still half-initialised. The shipped server was unaffected because it reaches the desktop first, and the test suite only escaped it because `tests/conftest.py` happens to import `macos_mcp.desktop.views` on the line above `macos_mcp.tree.views`; a test module or embedding caller that reached the tree first hit it. That re-export had no consumers, so `desktop/__init__.py` is now empty, as `tree/__init__.py` already was, leaving `desktop.config` and `desktop.views` importable as the leaf data modules they are. Import `Desktop` from `macos_mcp.desktop.service`
 
 ## [0.4.6] - 2026-09-08
